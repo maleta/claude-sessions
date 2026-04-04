@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Sessions</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    padding: 24px;
+    line-height: 1.5;
+  }
+  .header {
+    padding: 0 24px 24px;
+  }
+  .header h1 {
+    font-size: 1.5rem;
+    color: #e6edf3;
+    margin-bottom: 16px;
+  }
+  .header-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .header .stats {
+    font-size: 0.85rem;
+    color: #8b949e;
+  }
+  .toggle-hidden {
+    background: none;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    font-size: 0.8rem;
+    padding: 4px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .toggle-hidden:hover { border-color: #58a6ff; color: #58a6ff; }
+  .toggle-hidden.active { border-color: #58a6ff; color: #58a6ff; background: #1a2a3a; }
+  .search-box {
+    width: 100%;
+    padding: 10px 14px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #c9d1d9;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-box:focus { border-color: #58a6ff; }
+  .search-box::placeholder { color: #484f58; }
+  .groups {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    padding: 0 24px 16px;
+  }
+  .group {
+    flex: 0 0 500px;
+    min-width: 500px;
+  }
+  .group-header {
+    position: sticky;
+    top: 0;
+    background: #0d1117;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #21262d;
+  }
+  .group-path {
+    font-size: 0.85rem;
+    font-family: monospace;
+    color: #58a6ff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+  .group-count {
+    font-size: 0.75rem;
+    color: #8b949e;
+    background: #21262d;
+    padding: 1px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .hide-btn {
+    background: none;
+    border: none;
+    color: #484f58;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.2s;
+    flex-shrink: 0;
+  }
+  .hide-btn:hover { color: #f85149; }
+  .restore-btn {
+    background: none;
+    border: none;
+    color: #3fb950;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.2s;
+    flex-shrink: 0;
+  }
+  .restore-btn:hover { color: #56d364; }
+  .cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 16px 20px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: #58a6ff; }
+  .card.card-hidden {
+    opacity: 0.4;
+    border-style: dashed;
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .card-dates {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .card-date {
+    font-size: 0.8rem;
+    color: #8b949e;
+  }
+  .card-meta {
+    font-size: 0.8rem;
+    color: #8b949e;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .card-title {
+    font-size: 1.1rem;
+    color: #e6edf3;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .card-summary {
+    font-size: 0.9rem;
+    color: #8b949e;
+    margin-bottom: 10px;
+  }
+  .card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .topic {
+    background: #1f2a37;
+    color: #58a6ff;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .badge-completed { background: #1a3a2a; color: #3fb950; }
+  .badge-in-progress { background: #3a2a1a; color: #d29922; }
+  .badge-exploring { background: #1a2a3a; color: #58a6ff; }
+  .badge-debugging { background: #3a1a2a; color: #f85149; }
+  .card-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .resume-btn {
+    background: none;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    font-size: 0.75rem;
+    padding: 3px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: monospace;
+    transition: all 0.2s;
+  }
+  .resume-btn:hover {
+    border-color: #58a6ff;
+    color: #58a6ff;
+  }
+  .no-results {
+    text-align: center;
+    color: #484f58;
+    padding: 48px 0;
+    font-size: 1rem;
+    flex: 0 0 500px;
+  }
+  .copied-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #1f6feb;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .copied-toast.show { opacity: 1; }
+  .group-hidden .group-path { color: #484f58; text-decoration: line-through; }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>window.SESSIONS_DATA = window.SESSIONS_DATA || [];</script>
+<script src="sessions-data.js" onerror="console.warn('sessions-data.js not found - no sessions tracked yet')"></script>
+<script src="https://cdn.jsdelivr.net/npm/@maleta/blokjs/dist/blokjs.min.js"></script>
+<script>
+function relativeTime(dateStr) {
+  if (!dateStr) return '';
+  const ts = Date.parse(dateStr.replace(' ', 'T') + 'Z');
+  if (isNaN(ts)) return dateStr;
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 120) return '1 minute ago';
+  if (diff < 3600) return '~' + Math.floor(diff / 60) + ' minutes ago';
+  if (diff < 7200) return '~1 hour ago';
+  if (diff < 86400) return '~' + Math.floor(diff / 3600) + ' hours ago';
+  if (diff < 172800) return 'yesterday';
+  if (diff < 604800) return Math.floor(diff / 86400) + ' days ago';
+  if (diff < 2592000) return Math.floor(diff / 604800) + ' weeks ago';
+  return dateStr;
+}
+
+const STORAGE_KEY = 'claude-sessions-hidden';
+
+function loadHidden() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* ignore */ }
+  return { sessions: [], projects: [] };
+}
+
+function saveHidden(sessions, projects) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessions, projects }));
+}
+
+const stored = loadHidden();
+let _debounceTimer = null;
+
+// Pre-process sessions once: sort, build search index, parse topics, build derived fields
+const _raw = (window.SESSIONS_DATA || [])
+  .map(s => ({
+    ...s,
+    started_at: s.started_at || s.date || '',
+    updated_at: s.updated_at || s.date || '',
+  }))
+  .sort((a, b) => (b.updated_at || b.started_at).localeCompare(a.updated_at || a.started_at))
+  .map(s => ({
+    ...s,
+    _search: [s.title, s.summary, s.topics, s.project, s.project_path].join('\0').toLowerCase(),
+    _topics: s.topics.split(',').map(t => t.trim()).filter(Boolean),
+    _badgeClass: 'badge badge-' + s.status,
+    _msgLabel: s.messages + ' msgs',
+    _endPrefix: s.updated_at && s.updated_at !== s.started_at ? (s.status === 'completed' ? 'end' : 'latest') : '',
+    _isHidden: false,
+  }));
+
+blok.mount('#app', {
+  state: {
+    sessions: _raw,
+    searchInput: '',
+    search: '',
+    showToast: false,
+    showHidden: false,
+    hiddenSessionIds: stored.sessions,
+    hiddenProjectPaths: stored.projects,
+    tick: 0,
+  },
+
+  init() {
+    setInterval(() => { this.tick++; }, 60000);
+  },
+
+  watch: {
+    searchInput(val) {
+      clearTimeout(_debounceTimer);
+      _debounceTimer = setTimeout(() => { this.search = val; }, 200);
+    },
+  },
+
+  computed: {
+    filtered() {
+      const q = this.search.trim().toLowerCase();
+      let result = this.sessions;
+      if (q) {
+        result = result.filter(s => s._search.includes(q));
+      }
+      if (this.showHidden) return result;
+      const hiddenIds = new Set(this.hiddenSessionIds);
+      const hiddenPaths = new Set(this.hiddenProjectPaths);
+      return result.filter(s =>
+        !hiddenIds.has(s.id) && !hiddenPaths.has(s.project_path)
+      );
+    },
+    grouped() {
+      void this.tick;
+      const map = new Map();
+      const hiddenIds = new Set(this.hiddenSessionIds);
+      const hiddenPaths = new Set(this.hiddenProjectPaths);
+      for (const s of this.filtered) {
+        const path = s.project_path;
+        if (!map.has(path)) map.set(path, []);
+        s._isHidden = hiddenIds.has(s.id);
+        s._startLabel = 'start: ' + relativeTime(s.started_at);
+        s._endLabel = s._endPrefix ? s._endPrefix + ': ' + relativeTime(s.updated_at) : '';
+        map.get(path).push(s);
+      }
+      return Array.from(map, ([path, sessions]) => ({
+        projectPath: path,
+        sessions,
+        hidden: hiddenPaths.has(path),
+      }));
+    },
+    hiddenCount() {
+      return this.hiddenSessionIds.length + this.hiddenProjectPaths.length;
+    },
+    statsText() {
+      const s = this.filtered.length;
+      const g = this.grouped.length;
+      return s + ' session' + (s !== 1 ? 's' : '') + (this.search ? ' matching' : '') +
+        ' in ' + g + ' project' + (g !== 1 ? 's' : '');
+    },
+    hiddenBtnText() {
+      return (this.showHidden ? 'hide' : 'show') + ' ' + this.hiddenCount + ' hidden';
+    },
+  },
+
+  methods: {
+    toggleHidden() {
+      this.showHidden = !this.showHidden;
+    },
+    hideSession(id) {
+      if (this.hiddenSessionIds.includes(id)) return;
+      this.hiddenSessionIds = [...this.hiddenSessionIds, id];
+      saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
+    },
+    restoreSession(id) {
+      this.hiddenSessionIds = this.hiddenSessionIds.filter(x => x !== id);
+      saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
+    },
+    hideProject(path) {
+      if (this.hiddenProjectPaths.includes(path)) return;
+      this.hiddenProjectPaths = [...this.hiddenProjectPaths, path];
+      saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
+    },
+    restoreProject(path) {
+      this.hiddenProjectPaths = this.hiddenProjectPaths.filter(x => x !== path);
+      saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
+    },
+    copyResume(session) {
+      const cmd = 'cd ' + session.project_path + ' && claude --resume ' + session.id;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cmd).catch(() => this._fallbackCopy(cmd));
+      } else {
+        this._fallbackCopy(cmd);
+      }
+      this.showToast = true;
+      setTimeout(() => { this.showToast = false; }, 1500);
+    },
+    _fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    },
+  },
+
+  view: ($) => ({
+    div: { children: [
+      { div: { class: 'header', children: [
+        { h1: 'Claude Sessions' },
+        { div: { class: 'header-row', children: [
+          { span: { class: 'stats', text: $.statsText } },
+          { when: $.hiddenCount, children: [
+            { button: {
+              class: ['toggle-hidden', { active: $.showHidden }],
+              click: 'toggleHidden',
+              text: $.hiddenBtnText,
+            }},
+          ]},
+        ]}},
+        { input: {
+          class: 'search-box',
+          type: 'text',
+          bind: { placeholder: 'Search sessions by title, summary, topics, or project...' },
+          model: $.searchInput,
+        }},
+      ]}},
+
+      { div: { class: 'groups', children: [
+        { each: $.grouped, as: 'group', key: 'projectPath', children: [
+          { div: { class: { group: true, 'group-hidden': $.group.hidden }, children: [
+            { div: { class: 'group-header', children: [
+              { span: { class: 'group-path', bind: { title: $.group.projectPath }, text: $.group.projectPath } },
+              { span: { class: 'group-count', text: $.group.sessions.length } },
+              { when: $.group.hidden, children: [
+                { button: {
+                  class: 'restore-btn',
+                  click: 'restoreProject(group.projectPath)',
+                  bind: { title: 'Restore project' },
+                  text: 'restore',
+                }},
+              ]},
+              { when: $.not.group.hidden, children: [
+                { button: {
+                  class: 'hide-btn',
+                  click: 'hideProject(group.projectPath)',
+                  bind: { title: 'Hide project' },
+                  text: 'hide',
+                }},
+              ]},
+            ]}},
+            { div: { class: 'cards', children: [
+              { each: $.group.sessions, as: 's', key: 'id', children: [
+                { div: { class: { card: true, 'card-hidden': $.s._isHidden }, children: [
+                  { div: { class: 'card-top', children: [
+                    { div: { class: 'card-dates', children: [
+                      { span: { class: 'card-date', bind: { title: $.s.started_at }, text: $.s._startLabel } },
+                      { when: $.s._endLabel, children: [
+                        { span: { class: 'card-date', bind: { title: $.s.updated_at }, text: $.s._endLabel } },
+                      ]},
+                    ]}},
+                    { div: { class: 'card-meta', children: [
+                      { span: { text: $.s.branch } },
+                      { span: { text: $.s._msgLabel } },
+                      { span: { class: $.s._badgeClass, text: $.s.status } },
+                    ]}},
+                  ]}},
+                  { div: { class: 'card-title', text: $.s.title } },
+                  { div: { class: 'card-summary', text: $.s.summary } },
+                  { div: { class: 'card-footer', children: [
+                    { div: { class: 'topics', children: [
+                      { each: $.s._topics, as: 't', children: [
+                        { span: { class: 'topic', text: $.t } },
+                      ]},
+                    ]}},
+                    { div: { class: 'card-actions', children: [
+                      { when: $.s._isHidden, children: [
+                        { button: {
+                          class: 'restore-btn',
+                          click: 'restoreSession(s.id)',
+                          text: 'restore',
+                        }},
+                      ]},
+                      { when: $.not.s._isHidden, children: [
+                        { button: {
+                          class: 'hide-btn',
+                          click: 'hideSession(s.id)',
+                          text: 'hide',
+                        }},
+                      ]},
+                      { button: {
+                        class: 'resume-btn',
+                        click: 'copyResume(s)',
+                        bind: { title: 'Copy resume command' },
+                        text: 'copy resume cmd',
+                      }},
+                    ]}},
+                  ]}},
+                ]}},
+              ]},
+            ]}},
+          ]}},
+        ]},
+
+        { when: $.not.filtered.length, children: [
+          { div: { class: 'no-results', text: 'No sessions found.' } },
+        ]},
+      ]}},
+
+      { div: { class: ['copied-toast', { show: $.showToast }], text: 'Copied to clipboard!' } },
+    ]},
+  }),
+});
+</script>
+</body>
+</html>

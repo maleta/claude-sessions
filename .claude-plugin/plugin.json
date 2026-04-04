@@ -1,0 +1,14 @@
+{
+  "name": "session-tracker",
+  "version": "1.0.2",
+  "description": "Automatically tracks and summarizes Claude Code sessions with per-project SESSION_SUMMARIES.md and a web UI for browsing session history",
+  "author": {
+    "name": "Aleksandar Maletic"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maleta/claude-sessions"
+  },
+  "license": "MIT",
+  "keywords": ["session", "tracking", "history", "summaries"]
+}

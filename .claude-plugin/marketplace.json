@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "session-tracker",
+  "owner": {
+    "name": "maleta"
+  },
+  "description": "Automatic Claude Code session tracking with summaries and web UI",
+  "plugins": [
+    {
+      "name": "session-tracker",
+      "source": "./session-tracker",
+      "description": "Tracks and summarizes Claude Code sessions with a web UI and per-project SESSION_SUMMARIES.md"
+    }
+  ]
+}

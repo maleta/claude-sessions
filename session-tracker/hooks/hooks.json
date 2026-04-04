@@ -1,0 +1,27 @@
+{
+  "description": "Tracks and summarizes Claude Code sessions using Haiku",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"${CLAUDE_PLUGIN_ROOT}/hooks/session-tracker.ts\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"${CLAUDE_PLUGIN_ROOT}/hooks/session-tracker.ts\" --final",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
