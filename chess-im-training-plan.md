@@ -1,132 +1,239 @@
 # Plan za IM — kurs u lekcijama od ~1h
 
-Ovaj kurs je organizovan u **zaokružene lekcije od oko 1 sata**. Svaka lekcija
-stoji sama za sebe: imaš cilj, razradu sata i opcionu vežbu „između lekcija".
+Kurs je organizovan u **zaokružene lekcije od oko 1 sata**. Svaka lekcija stoji
+sama za sebe: cilj, razrada sata i **merilo** po kome znaš da si je savladao.
 
 **Bez dnevnog pritiska.** Radiš jednu lekciju kad stigneš (jednom u par dana ili
-ređe). Vežbanje između lekcija je opciono i ide tvojim tempom — taktika kad imaš
-10 minuta, duga partija kad imaš vremena.
+ređe). Vežbanje između lekcija je opciono i ide tvojim tempom.
 
 ## Kako koristiti
-- Idi redom. Lekcije su poređane tako da svaka gradi na prethodnoj.
-- Štikliraj `[x]` kad završiš lekciju.
-- Ne juri. Ako lekcija „ne legne", ponovi je sledeći put — to nije nazadovanje.
+- **Prvo uradi ULAZNI TEST** (Modul P) — on te ubacuje na pravo mesto, da ne
+  gubiš vreme na ono što već znaš.
+- Idi redom unutar modula. Štikliraj `[x]` kad ispuniš **Merilo** lekcije.
+- Ako ne ispuniš Merilo — to nije neuspeh; ponovi lekciju sledeći put.
 - Posle svakih ~5 lekcija odigraj bar jednu dugu partiju i analiziraj je.
 
-## Realna očekivanja
-Put do IM (FIDE ~2400 + 3 IM norme) je višegodišnji. Ovaj kurs ti daje
-**redosled i sadržaj**; brzina zavisi od tebe. Ne preskači module — slabost u
-osnovama te koči na višem nivou.
+## O „Merilu uspeha"
+Merilo je kratak, proverljiv kriterijum „znaš dovoljno da pređeš dalje". Nije
+ispit — služi tebi da ne juriš dalje sa rupom u temelju. Procente shvati
+okvirno (lichess/chess.com puzzle rejting je dobar orijentir).
 
-> **Prioritet kroz ceo kurs:** Taktika → Završnice → Pozicija → Strategija →
-> Otvaranja → Priprema/psihologija. Otvaranja namerno dolaze kasnije.
+## Realna očekivanja
+Put do IM (FIDE ~2400 + 3 IM norme) je višegodišnji. Ovaj kurs daje **redosled,
+sadržaj i merila**; brzina zavisi od tebe. Odnos truda kroz veći deo puta neka
+bude ~**70% taktika/završnice/analiza : 30% otvaranja** — otvaranja namerno
+dolaze kasnije i dobijaju veći udeo tek u Modulu 3.
+
+> **Prioritet:** Taktika → Završnice → Pozicija → Napad → Strategija →
+> Otvaranja → Priprema/psihologija.
+
+---
+
+## MODUL P — Ulazni test (gde da počneš)
+
+- [ ] **L1. Taktička dijagnostika.** Reši 20 mešanih zadataka bez teme na sajtu;
+  zabeleži puzzle rejting i koje motive grešiš. *Merilo: imaš okvirni rejting.*
+- [ ] **L2. Pozicija i završnica — samoprocena.** Pokušaj: K+P vs K dobitak,
+  Lucena, izaberi plan u 3 date pozicije. *Merilo: znaš koje od ovog NE umeš.*
+- [ ] **L3. Dve duge partije + iskrena ocena nivoa.** *Merilo: na osnovu L1–L3
+  izaberi startni modul po tabeli ispod.*
+
+**Gde da uđeš:** < ~1600 → Modul 0. ~1600–2000 → Modul 1. ~2000–2200 → Modul 2.
+\>2200 → Modul 3 (uz trenera). Ako nisi siguran, počni jedan modul niže — proći
+ćeš ga brzo i zatvoriti rupe.
 
 ---
 
 ## MODUL 0 — Temelji (orijentir: do ~1600)
 
-- [ ] **L1. Kako se uči šah + postavka alata.** Napravi nalog na lichess/chess.com,
-  podesi dnevnik partija. Sat: 15 min teorija „kako uči mozak (ponavljanje,
-  analiza grešaka)", 45 min taktički motivi — vilica i vez.
-- [ ] **L2. Taktika: nabod i dvostruki napad.** Sat: motivi + 25 zadataka.
-- [ ] **L3. Taktika: otkriveni napad i otkriveni šah.** 25 zadataka.
-- [ ] **L4. Taktika: privlačenje, odvlačenje, eliminacija branioca.** 25 zadataka.
-- [ ] **L5. Matiranja I.** Mat damom + kraljem, mat dvema topovima. Uvežbaj do
-  automatizma protiv računara.
-- [ ] **L6. Matiranja II.** Mat jednim topom; uvod u mat dva lovca (samo princip).
-- [ ] **L7. Završnica: kralj i pešak protiv kralja.** Opozicija, pravilo kvadrata,
-  ključna polja. Najvažnija osnovna završnica — vrati joj se kasnije.
-- [ ] **L8. Principi otvaranja.** Razvoj, centar, rokada, ne vaditi damu rano,
-  ne vući istu figuru dvaput. Bez varijanti.
-- [ ] **L9. Vrednost figura i razmene.** Kad je razmena dobra/loša, materijalni
-  disbalans (npr. lovac za 3 pešaka).
-- [ ] **L10. Analiza sopstvene partije.** Nauči metod: gde je bila kritična
-  greška, šta sam mislio, šta je trebalo. Ovo radiš do kraja kursa.
+### Taktički motivi (po jedan po lekciji)
+- [ ] **L4. Vilica.** Skakačeva, pešačka i damska vilica; kako je postaviti/izbeći.
+  *Merilo: 8/10 vilica-zadataka (lak nivo).*
+- [ ] **L5. Vez (pin).** Apsolutni i relativni; kako iskoristiti vezanu figuru.
+  *Merilo: 8/10 zadataka sa vezom.*
+- [ ] **L6. Nabod (skewer).** Razlika prema vezu; tipične mete. *Merilo: 8/10.*
+- [ ] **L7. Dvostruki napad.** Jednom figurom napadaš dve mete. *Merilo: 8/10.*
+- [ ] **L8. Otkriveni napad.** Pomeranjem jedne figure otvaraš drugu. *Merilo: 8/10.*
+- [ ] **L9. Otkriveni i dvostruki šah.** Najjači motiv. *Merilo: 8/10.*
+- [ ] **L10. Privlačenje (decoy).** Mamac na loše polje. *Merilo: 8/10.*
+- [ ] **L11. Odvlačenje (deflection).** Skidanje branioca sa zadatka. *Merilo: 8/10.*
+- [ ] **L12. Preopterećena figura.** Branilac koji ne stiže sve. *Merilo: 8/10.*
+
+### Osnovna matiranja
+- [ ] **L13. Mat damom i kraljem.** Tehnika „kralj uz kralja". *Merilo: matiraš
+  računar < 12 poteza, bez pata.*
+- [ ] **L14. Mat sa dva topa (lestvica).** *Merilo: matiraš pouzdano.*
+- [ ] **L15. Mat jednim topom.** Opozicija + teranje na ivicu. *Merilo: matiraš
+  računar pouzdano.*
+
+### Prva završnica
+- [ ] **L16. K+P vs K: opozicija.** *Merilo: dobijaš/remiziraš tačno iz datih pozicija.*
+- [ ] **L17. K+P vs K: pravilo kvadrata + ključna polja.** *Merilo: tačno
+  procenjuješ „stiže/ne stiže" napamet.*
+
+### Otvaranje i osnove
+- [ ] **L18. Principi otvaranja I.** Razvoj lakih figura, borba za centar.
+  *Merilo: u 3 partije razviješ se bez grube greške do 10. poteza.*
+- [ ] **L19. Principi otvaranja II.** Rokada, bezbednost kralja, tipične rane greške.
+  *Merilo: prepoznaješ i kažnjavaš protivnikov loš razvoj.*
+- [ ] **L20. Vrednost figura i kada razmenjivati.** *Merilo: objasniš zašto je data
+  razmena dobra/loša.*
+- [ ] **L21. Materijalni disbalans (osnove).** Npr. 2 laka za topa, lovac za 3 pešaka.
+  *Merilo: tačno procenjuješ ko stoji bolje u datim primerima.*
+
+### Navika koja ostaje zauvek
+- [ ] **L22. Metod analize sopstvene partije.** Naći kritičnu grešku, šta sam
+  mislio, šta je trebalo. *Merilo: napišeš kratku analizu svoje partije bez motora.*
+
+---
 
 ## MODUL 1 — Klubski igrač (orijentir: ~1600–2000)
 
 ### Računanje i taktika (dublji sloj)
-- [ ] **L11. Kandidat-potezi (metod sveće).** Kako sistematski biraš poteze za
-  računanje umesto da gledaš nasumično.
-- [ ] **L12. Vizualizacija.** Računaj varijante „naslepo" do 3–4 poteza bez
-  pomeranja figura.
-- [ ] **L13. Tihi potez i međupotez (zwischenzug).** Najteži motivi za pronaći.
-- [ ] **L14. Žrtva za inicijativu.** Privremene vs trajne žrtve; kako proceniti.
-- [ ] **L15. Kombinacije — mešani zadaci.** 30 zadataka bez naznake teme (kao u partiji).
+- [ ] **L23. Kandidat-potezi.** Sistematski izbor poteza za računanje. *Merilo:
+  pre računanja navedeš 2–3 kandidata u datim pozicijama.*
+- [ ] **L24. Vizualizacija I.** Računaj 2–3 poteza bez pomeranja figura. *Merilo:
+  tačno „vidiš" poziciju posle kratke varijante.*
+- [ ] **L25. Vizualizacija II.** Naslepo 3–4 poteza. *Merilo: rešiš 5 zadataka „u glavi".*
+- [ ] **L26. Tihi potez.** Jaka pretnja umesto šaha/uzimanja. *Merilo: 7/10 zadataka.*
+- [ ] **L27. Međupotez (zwischenzug).** Ubaciti potez pre „očekivanog". *Merilo: 7/10.*
+- [ ] **L28. Privremena žrtva za inicijativu.** Računaš povraćaj. *Merilo: 7/10.*
+- [ ] **L29. Procena trajne žrtve (kompenzacija).** Kad nema brzog povraćaja.
+  *Merilo: objasniš kompenzaciju u 5 pozicija.*
+- [ ] **L30. Mešani taktički set I.** 30 zadataka bez teme. *Merilo: ≥75% tačno.*
+- [ ] **L31. Mešani taktički set II.** Teži set. *Merilo: ≥70% tačno.*
 
 ### Pozicioni elementi
-- [ ] **L16. Jaka i slaba polja; jak skakač na utvrđenom polju.**
-- [ ] **L17. Otvorene i poluotvorene linije; topovi na sedmom redu.**
-- [ ] **L18. Par lovaca i kada vredi.**
-- [ ] **L19. Dobar vs loš lovac.**
-- [ ] **L20. Pešačke strukture I — izolani damin pešak (IQP).** Igra za obe strane.
-- [ ] **L21. Pešačke strukture II — viseći pešaci i pešačka većina.**
-- [ ] **L22. Pešačke strukture III — manjinski napad.**
-- [ ] **L23. Slabosti i napad na kralja sa raznih strana rokade.**
+- [ ] **L32. Jaka i slaba polja.** *Merilo: u datoj poziciji označiš slabosti obe strane.*
+- [ ] **L33. Utvrđeni skakač (outpost).** *Merilo: nađeš i postaviš skakača na jako polje.*
+- [ ] **L34. Otvorene i poluotvorene linije.** *Merilo: planiraš borbu za liniju.*
+- [ ] **L35. Topovi na 7. (i 2.) redu.** *Merilo: prepoznaš kad vredi udvojiti.*
+- [ ] **L36. Par lovaca.** Kad i kako vredi. *Merilo: objasniš kada par lovaca prednjači.*
+- [ ] **L37. Dobar vs loš lovac.** *Merilo: prepoznaš i popraviš/zameniš lošeg lovca.*
+- [ ] **L38. IQP — igra za stranu sa izolanim pešakom.** *Merilo: znaš plan napada.*
+- [ ] **L39. IQP — igra protiv (blokada).** *Merilo: znaš plan blokade i razmene.*
+- [ ] **L40. Viseći pešaci.** *Merilo: razumeš dinamiku c/d pešaka za obe strane.*
+- [ ] **L41. Pešačka većina i prohodnjak.** Stvaranje i napredovanje. *Merilo:
+  napraviš prohodnjaka iz date strukture.*
+- [ ] **L42. Manjinski napad.** *Merilo: izvedeš b4-b5 plan i stvoriš metu.*
+
+### Mini-modul: NAPAD NA KRALJA
+- [ ] **L43. Osnovni matni obrasci u srednjici.** (back-rank, Lxh7 ideja, baterija D+L.)
+  *Merilo: prepoznaš obrazac i izvedeš mat u 7/10 zadataka.*
+- [ ] **L44. Grčki poklon — Lxh7+.** Uslovi kad žrtva radi/ne radi. *Merilo: tačno
+  odlučiš „ide/ne ide" u 5 pozicija.*
+- [ ] **L45. Žrtve Lxh6 / Sf5 / Sd5.** Razbijanje zaklona i polja oko kralja.
+  *Merilo: nađeš ispravnu žrtvu u 5 pozicija.*
+- [ ] **L46. Otvaranje linija ka kralju.** Žrtva pešaka/kvaliteta za napad.
+  *Merilo: objasniš kompenzaciju i nastavak.*
+- [ ] **L47. Raznostrane rokade — trka pešacima.** Ko je brži, koga ne dirati.
+  *Merilo: izabereš ispravan redosled napada u 3 primera.*
+- [ ] **L48. Odbrana od napada i kontraudar.** Kada vraćaš materijal, večiti šah.
+  *Merilo: nađeš odbranu/remi u 5 „lošijih" pozicija.*
 
 ### Završnice (drugi sloj)
-- [ ] **L24. Topovske završnice I.** Lucena (gradnja mosta).
-- [ ] **L25. Topovske završnice II.** Filidor (pasivna odbrana), pravilo „top iza
-  prohodnog pešaka".
-- [ ] **L26. Aktivni kralj i princip dve slabosti.**
-- [ ] **L27. Lovac vs skakač u završnici; kada koji prednjači.**
+- [ ] **L49. Topovska: Lucena (most).** *Merilo: dobijaš pozdano.*
+- [ ] **L50. Topovska: Filidor (odbrana).** *Merilo: držiš remi pouzdano.*
+- [ ] **L51. Topovska: top iza prohodnjaka + aktivnost.** *Merilo: znaš pravilo i primer.*
+- [ ] **L52. Aktivni kralj u završnici.** *Merilo: centralizuješ kralja u pravom času.*
+- [ ] **L53. Princip dve slabosti.** *Merilo: kreiraš drugu slabost u datoj poziciji.*
+- [ ] **L54. Lovac vs skakač (osnove).** Otvorena vs zatvorena pozicija. *Merilo:
+  procenjuješ ko prednjači po strukturi.*
 
-### Skeletni repertoar (učiš IDEJE, ne nizove poteza)
-- [ ] **L28. Otvaranje za belog — izbor i osnovni plan.** (npr. 1.e4 ili 1.d4 / sistem.)
-- [ ] **L29. Odbrana protiv 1.e4 — izbor i ideje.**
-- [ ] **L30. Odbrana protiv 1.d4 — izbor i ideje.**
-- [ ] **L31. Tipične srednjice iz tvog repertoara.** Poveži otvaranje sa planom.
+### Skeletni repertoar (učiš IDEJE; personalizuje se uz stil)
+- [ ] **L55. Otvaranje za belog — izbor + glavni plan.** *Merilo: odigraš ga u 3 partije.*
+- [ ] **L56. Belim: ključne ideje glavne linije.** *Merilo: znaš plan, ne samo poteze.*
+- [ ] **L57. Protiv 1.e4 — izbor odbrane + ideje.** *Merilo: odigraš u 3 partije.*
+- [ ] **L58. Protiv 1.d4 — izbor odbrane + ideje.** *Merilo: odigraš u 3 partije.*
+- [ ] **L59. Tipične srednjice iz tvog repertoara.** *Merilo: povežeš otvaranje sa planom.*
 
-### Klasične partije
-- [ ] **L32. Capablanca — jednostavnost i tehnika.** 2 partije s komentarom.
-- [ ] **L33. Karpov — pozicioni pritisak.** 2 partije.
-- [ ] **L34. Tal / Kasparov — napad i inicijativa.** 2 partije.
+### Klasične partije (uvod u naviku doživotnog proučavanja)
+- [ ] **L60. Kako se proučava klasična partija + Capablanca.** *Merilo: samostalno
+  prokomentarišeš jednu partiju.*
+- [ ] **L61. Karpov — pozicioni pritisak.** *Merilo: prepoznaš plan u partiji.*
+- [ ] **L62. Tal/Kasparov — napad i inicijativa.** *Merilo: nađeš ključnu žrtvu pre rešenja.*
+
+---
 
 ## MODUL 2 — Kandidat za majstora (orijentir: ~2000–2200)
 
-- [ ] **L35. Pravljenje plana iz strukture.** Od dijagnoze pozicije do konkretnog plana.
-- [ ] **L36. Profilaksa.** Sprečavanje protivnikovih ideja (Petrosjan/Karpov metod).
-- [ ] **L37. Manevrisanje i poboljšavanje najlošije figure.**
-- [ ] **L38. Realizacija prednosti.** Kako pretvoriti „+1" u pobedu bez panike.
-- [ ] **L39. Odbrana gorih pozicija i pravljenje tvrđave.** Podcenjena veština.
-- [ ] **L40. Dinamika vs statika — kada žrtvovati strukturu za inicijativu.**
-- [ ] **L41. Damske završnice — osnove.**
-- [ ] **L42. Teško-figurne završnice (dama+top, dva topa).**
-- [ ] **L43. Topovske završnice III — praktične, sa više pešaka.**
-- [ ] **L44. Dubinski repertoar I — glavne varijante za belog + tabija pozicije.**
-- [ ] **L45. Dubinski repertoar II — glavne varijante za crnog.**
-- [ ] **L46. Turnirska partija + duboka post-mortem analiza.** (sa trenerom/jačim igračem ako ikako možeš)
+- [ ] **L63. Dijagnoza pozicije.** Šta pitati: struktura, figure, kralj, prostor.
+  *Merilo: napišeš dijagnozu za 3 pozicije.*
+- [ ] **L64. Od dijagnoze do plana.** *Merilo: izvedeš konkretan plan iz dijagnoze.*
+- [ ] **L65. Profilaksa I — ideja.** Šta protivnik želi? *Merilo: nađeš protivnikovu pretnju.*
+- [ ] **L66. Profilaksa II — kao navika u svakom potezu.** *Merilo: u partiji
+  beležiš protivnikovu ideju pre svog poteza.*
+- [ ] **L67. Manevrisanje i poboljšanje najlošije figure.** *Merilo: nađeš najlošiju
+  figuru i plan za nju.*
+- [ ] **L68. Prostorna prednost.** Kako stiskati bez razmena. *Merilo: izvedeš plan.*
+- [ ] **L69. Realizacija materijalne prednosti.** Razmene, bez panike. *Merilo:
+  dobiješ dobijenu poziciju protiv računara.*
+- [ ] **L70. Realizacija pozicione prednosti.** Bez žurbe, „ne žuri". *Merilo: isto.*
+- [ ] **L71. Aktivna odbrana gorih pozicija.** *Merilo: spaseš 3 lošije pozicije.*
+- [ ] **L72. Tvrđava.** Prepoznavanje i gradnja. *Merilo: napraviš tvrđavu u 2 primera.*
+- [ ] **L73. Dinamika vs statika.** Kada žrtvovati strukturu za inicijativu. *Merilo:
+  ispravno odlučiš u 5 pozicija.*
+- [ ] **L74. Damske završnice I — osnove.** *Merilo: znaš osnovne tehnike.*
+- [ ] **L75. Damske završnice II — dama vs prohodni pešak.** *Merilo: dobijaš/držiš tačno.*
+- [ ] **L76. Teško-figurne (D+T napad / dva topa).** *Merilo: znaš tipične motive.*
+- [ ] **L77. Topovske III — praktične sa više pešaka.** *Merilo: igraš plan, ne nasumično.*
+- [ ] **L78. Topovske IV — tipične (npr. 4 vs 3 na jednom krilu).** *Merilo: znaš ocenu i plan.*
+- [ ] **L79. Dubinski repertoar belim — varijanta po varijanta.** *Merilo: pokrivaš
+  glavne odgovore bez „rupa".*
+- [ ] **L80. Dubinski repertoar crnim.** *Merilo: isto za obe odbrane.*
+- [ ] **L81. Tabija-pozicije i tipični planovi.** *Merilo: znaš plan iz svake tabije.*
+- [ ] **L82. Turnirska partija + duboka post-mortem analiza.** Idealno s jačim
+  igračem/trenerom. *Merilo: izvučeš konkretnu pouku i upišeš je u listu slabosti.*
+
+---
 
 ## MODUL 3 — Ka IM (orijentir: ~2200–2400+)
 
-- [ ] **L47. Dijagnoza sopstvenih slabosti iz baze partija.** Napravi listu
-  ponovljivih grešaka (tip pozicije, faza, vrsta odluke).
-- [ ] **L48. Individualni plan po slabostima.** Sledeće lekcije ciljaju baš njih.
-- [ ] **L49. Priprema protiv konkretnog protivnika.** Baza + motor, ali sa razumevanjem.
-- [ ] **L50. Kritičan rad sa motorom.** Razumeti „zašto", ne pamtiti ocenu.
-- [ ] **L51. Upravljanje vremenom i odluke pod pritiskom.**
-- [ ] **L52. Psihologija: oporavak posle poraza, koncentracija, niz partija.**
-- [ ] **L53. Fizička priprema i izdržljivost za duge partije.**
-- [ ] **L54. Plan za norme.** Izbor norm-turnira (dovoljno titulisanih protivnika),
-  raspored, ciljevi.
+> Od ovde kurs postaje **individualan**. Idealno je imati trenera (IM/GM) koji
+> prati tvoju bazu partija i pravi plan oko tvojih konkretnih rupa.
 
-> Od L47 nadalje kurs postaje **individualan**. Idealno je da od ovog nivoa imaš
-> trenera (ideálno IM/GM) koji prati tvoju bazu i pravi plan oko tvojih rupa.
+- [ ] **L83. Dijagnoza slabosti iz baze partija.** Lista ponovljivih grešaka
+  (tip pozicije, faza, vrsta odluke). *Merilo: imaš konkretnu listu od 3–5 slabosti.*
+- [ ] **L84. Individualni plan po slabostima.** *Merilo: za svaku slabost imaš
+  zadatke/temu.*
+- [ ] **L85. Priprema protiv protivnika I — baza i repertoar mete.** *Merilo:
+  pripremiš liniju za konkretnog protivnika.*
+- [ ] **L86. Priprema II — kritička upotreba motora.** *Merilo: razumeš zašto, ne
+  pamtiš samo ocenu.*
+- [ ] **L87. Rad sa motorom u analizi.** Kada mu verovati, kada misliti sam.
+  *Merilo: nađeš ljudski plan iza ocene.*
+- [ ] **L88. Upravljanje vremenom.** Raspodela po fazama, izbegavanje cajtnota.
+  *Merilo: odigraš partiju bez cajtnota.*
+- [ ] **L89. Kritični momenti.** Kad uložiti dugo razmišljanje. *Merilo: prepoznaš
+  prelomne tačke u svojim partijama.*
+- [ ] **L90. Psihologija — oporavak posle poraza.** *Merilo: imaš rutinu „reset".*
+- [ ] **L91. Psihologija — koncentracija kroz niz partija (turnir).** *Merilo: imaš
+  plan dnevne rutine na turniru.*
+- [ ] **L92. Fizička priprema i izdržljivost.** San, ishrana, kondicija za duge partije.
+  *Merilo: imaš realan režim.*
+- [ ] **L93. Plan za norme.** Izbor norm-turnira (dovoljno titulisanih protivnika),
+  raspored, ciljevi. *Merilo: imaš kalendar turnira za sledećih 6–12 meseci.*
 
 ---
 
 ## Vežbanje između lekcija (sve opciono, bez rasporeda)
-- **Taktika:** par puzli kad god ti se da (telefon, pauza). Količina nije bitna,
-  bitna je redovnost „kad stigneš".
-- **Partije:** duge partije (15+10 i sporije) vrede mnogo više od blica za napredak.
-- **Analiza:** svaku ozbiljnu partiju analiziraj PRE nego što pustiš motor —
-  prvo svojom glavom, pa proveri.
-- **Pravilo:** bolje 1 lekcija mesečno dosledno godinama, nego „sprint" pa pauza.
+- **Taktika:** par puzli kad god stigneš. Redovnost „kad stigneš" > količina.
+- **Partije:** duge partije (15+10 i sporije) vrede mnogo više od blica.
+- **Analiza:** prvo svojom glavom, pa proveri motorom.
+- **Spirala:** na svakih ~5 lekcija osvrni se na jedan raniji motiv/završnicu.
+- **Pravilo:** bolje 1 lekcija dosledno nego sprint pa pauza.
+
+## Opcioni dodaci (za kasnije, ako poželiš)
+Nismo ih uvrstili u glavni tok, ali su korisni ka vrhu:
+- **Skakačke završnice** (uklj. „skakačke su kao pešačke").
+- **Lovci raznih boja** (završnica i srednjica — vrlo praktično).
+- **Dublja pešačka završnica** (trougao/zugzwang, korespondentna polja, proboj).
 
 ## Predloženi resursi (po modulima)
-- **Taktika:** Lichess puzzles, „1001 Winning Chess Sacrifices and Combinations".
+- **Taktika:** Lichess puzzles; „1001 Winning Chess Sacrifices and Combinations".
 - **Računanje:** Aagaard — *Calculation*.
-- **Završnice:** Silman — *Complete Endgame Course* (po nivou), kasnije Dvoretsky — *Endgame Manual*.
+- **Završnice:** Silman — *Complete Endgame Course*; kasnije Dvoretsky — *Endgame Manual*.
 - **Strategija:** Silman — *How to Reassess Your Chess*; Watson — *Secrets of Modern Chess Strategy*.
-- **Pozicija/klasici:** zbirke partija Capablance, Karpova, Kasparova.
-- **Više:** Aagaard — serija *Grandmaster Preparation*.
+- **Napad:** Vukovic — *The Art of Attack in Chess*.
+- **Klasici:** zbirke partija Capablance, Karpova, Kasparova.
+- **Vrhunski rad:** Aagaard — serija *Grandmaster Preparation*.
