@@ -50,6 +50,13 @@ Return ONLY valid JSON, nothing else.`;
 
 // -- Types --
 
+interface TokenUsage {
+  input: number;        // uncached input tokens (full price)
+  output: number;       // output tokens
+  cache_write: number;  // cache_creation_input_tokens
+  cache_read: number;   // cache_read_input_tokens (cache hits)
+}
+
 interface Session {
   id: string;
   started_at: string;
@@ -66,6 +73,7 @@ interface Session {
   last_analyzed_at: number;
   analysis_count: number;
   summaries: string[];
+  tokens: TokenUsage;
 }
 
 interface HookInput {
@@ -87,11 +95,20 @@ interface ContentBlock {
   text?: string;
 }
 
+interface Usage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+}
+
 interface TranscriptEntry {
   type: string;
   message?: {
+    id?: string;
     role?: string;
     content?: string | ContentBlock[];
+    usage?: Usage;
   };
 }
 
@@ -113,6 +130,7 @@ async function loadSessions(): Promise<Session[]> {
           delete legacy.date;
         }
         if (!s.summaries) s.summaries = [];
+        if (!s.tokens) s.tokens = { input: 0, output: 0, cache_write: 0, cache_read: 0 };
       }
       return sessions;
     } catch {
@@ -190,6 +208,45 @@ async function countUserMessages(transcriptPath: string): Promise<number> {
     // File not found or permission error
   }
   return count;
+}
+
+async function computeTokenUsage(transcriptPath: string): Promise<TokenUsage> {
+  const totals: TokenUsage = { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+  // Streamed multi-block turns repeat the same message id across several lines,
+  // and output_tokens can grow between them; keep the LAST (final) usage per id.
+  const byId = new Map<string, Usage>();
+  try {
+    const text = await Bun.file(transcriptPath).text();
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      let entry: TranscriptEntry;
+      try { entry = JSON.parse(trimmed); } catch { continue; }
+      if (entry.type !== "assistant") continue;
+
+      const usage = entry.message?.usage;
+      if (!usage) continue;
+
+      const id = entry.message?.id;
+      if (id) {
+        byId.set(id, usage);
+        continue;
+      }
+      addUsage(totals, usage);
+    }
+    for (const usage of byId.values()) addUsage(totals, usage);
+  } catch {
+    // File not found or permission error
+  }
+  return totals;
+}
+
+function addUsage(totals: TokenUsage, usage: Usage): void {
+  totals.input += usage.input_tokens ?? 0;
+  totals.output += usage.output_tokens ?? 0;
+  totals.cache_write += usage.cache_creation_input_tokens ?? 0;
+  totals.cache_read += usage.cache_read_input_tokens ?? 0;
 }
 
 async function buildConversationText(
@@ -334,6 +391,13 @@ function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + "B";
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
+  return String(n);
+}
+
 async function updateProjectSummaries(session: Session): Promise<void> {
   const cwd = session.project_path;
   if (!cwd) return;
@@ -352,6 +416,8 @@ async function updateProjectSummaries(session: Session): Promise<void> {
 - **Branch**: \`${session.branch}\`
 - **Status**: ${session.status}
 - **Messages**: ${session.messages}
+- **Tokens (regular)**: ${fmtTokens(session.tokens.input)} in / ${fmtTokens(session.tokens.output)} out
+- **Tokens (cached)**: ${fmtTokens(session.tokens.cache_read)} read / ${fmtTokens(session.tokens.cache_write)} write
 - **Topics**: ${session.topics}
 - **Session ID**: \`${session.id}\`
 - **Resume**: \`claude --resume ${session.id}\`
@@ -481,6 +547,7 @@ async function main(): Promise<void> {
   if (!(await Bun.file(transcriptPath).exists())) process.exit(0);
 
   const msgCount = await countUserMessages(transcriptPath);
+  const tokens = await computeTokenUsage(transcriptPath);
   const sessions = await loadSessions();
 
   // Cleanup stale sessions (handles terminal close / Ctrl+C / crash)
@@ -603,6 +670,7 @@ async function main(): Promise<void> {
     last_analyzed_at: msgCount,
     analysis_count: analysisCount,
     summaries: updatedSummaries,
+    tokens,
   };
 
   if (freshExisting) {
@@ -616,10 +684,12 @@ async function main(): Promise<void> {
   await updateProjectSummaries(sessionObj);
 
   const title = summary.title ?? "session";
+  const t = sessionObj.tokens;
+  const tokLine = `${fmtTokens(t.input)} in / ${fmtTokens(t.output)} out, cache ${fmtTokens(t.cache_read)} read / ${fmtTokens(t.cache_write)} write`;
   if (isFinalBg) {
-    console.error(`Session logged: "${title}"`);
+    console.error(`Session logged: "${title}" (${tokLine})`);
   } else {
-    console.error(`Session snapshot saved: "${title}"`);
+    console.error(`Session snapshot saved: "${title}" (${tokLine})`);
   }
 }
 

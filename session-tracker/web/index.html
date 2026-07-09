@@ -173,6 +173,17 @@
     color: #8b949e;
     margin-bottom: 10px;
   }
+  .card-tokens {
+    font-size: 0.75rem;
+    font-family: monospace;
+    color: #8b949e;
+    margin-bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .card-tokens .tok-label { color: #484f58; }
+  .card-tokens .tok-val { color: #58a6ff; }
   .card-footer {
     display: flex;
     justify-content: space-between;
@@ -273,6 +284,14 @@ function relativeTime(dateStr) {
   return dateStr;
 }
 
+function formatTokens(n) {
+  if (!n) return '0';
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(n);
+}
+
 const STORAGE_KEY = 'claude-sessions-hidden';
 
 function loadHidden() {
@@ -298,7 +317,9 @@ const _raw = (window.SESSIONS_DATA || [])
     updated_at: s.updated_at || s.date || '',
   }))
   .sort((a, b) => (b.updated_at || b.started_at).localeCompare(a.updated_at || a.started_at))
-  .map(s => ({
+  .map(s => {
+    const tk = s.tokens || { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+    return {
     ...s,
     _search: [s.title, s.summary, s.topics, s.project, s.project_path].join('\0').toLowerCase(),
     _topics: s.topics.split(',').map(t => t.trim()).filter(Boolean),
@@ -306,7 +327,18 @@ const _raw = (window.SESSIONS_DATA || [])
     _msgLabel: s.messages + ' msgs',
     _endPrefix: s.updated_at && s.updated_at !== s.started_at ? (s.status === 'completed' ? 'end' : 'latest') : '',
     _isHidden: false,
-  }));
+    _tok: {
+      in: formatTokens(tk.input),
+      out: formatTokens(tk.output),
+      cw: formatTokens(tk.cache_write),
+      cr: formatTokens(tk.cache_read),
+    },
+    _tokTotal: tk.input + tk.output + tk.cache_write + tk.cache_read,
+    _tokTitle:
+      'regular: ' + tk.input.toLocaleString() + ' in / ' + tk.output.toLocaleString() + ' out\n' +
+      'cached: ' + tk.cache_read.toLocaleString() + ' read / ' + tk.cache_write.toLocaleString() + ' write',
+  };
+  });
 
 blok.mount('#app', {
   state: {
@@ -376,6 +408,15 @@ blok.mount('#app', {
     hiddenBtnText() {
       return (this.showHidden ? 'hide' : 'show') + ' ' + this.hiddenCount + ' hidden';
     },
+    tokensText() {
+      let inp = 0, out = 0, cw = 0, cr = 0;
+      for (const s of this.filtered) {
+        const tk = s.tokens || {};
+        inp += tk.input || 0; out += tk.output || 0; cw += tk.cache_write || 0; cr += tk.cache_read || 0;
+      }
+      return 'tokens · regular ' + formatTokens(inp) + ' in / ' + formatTokens(out) +
+        ' out · cached ' + formatTokens(cr) + ' read / ' + formatTokens(cw) + ' write';
+    },
   },
 
   methods: {
@@ -428,6 +469,7 @@ blok.mount('#app', {
         { h1: 'Claude Sessions' },
         { div: { class: 'header-row', children: [
           { span: { class: 'stats', text: $.statsText } },
+          { span: { class: 'stats', text: $.tokensText } },
           { when: $.hiddenCount, children: [
             { button: {
               class: ['toggle-hidden', { active: $.showHidden }],
@@ -485,6 +527,24 @@ blok.mount('#app', {
                   ]}},
                   { div: { class: 'card-title', text: $.s.title } },
                   { div: { class: 'card-summary', text: $.s.summary } },
+                  { div: { class: 'card-tokens', bind: { title: $.s._tokTitle }, children: [
+                    { span: { children: [
+                      { span: { class: 'tok-label', text: 'in ' } },
+                      { span: { class: 'tok-val', text: $.s._tok.in } },
+                    ]}},
+                    { span: { children: [
+                      { span: { class: 'tok-label', text: 'out ' } },
+                      { span: { class: 'tok-val', text: $.s._tok.out } },
+                    ]}},
+                    { span: { children: [
+                      { span: { class: 'tok-label', text: 'cache read ' } },
+                      { span: { class: 'tok-val', text: $.s._tok.cr } },
+                    ]}},
+                    { span: { children: [
+                      { span: { class: 'tok-label', text: 'cache write ' } },
+                      { span: { class: 'tok-val', text: $.s._tok.cw } },
+                    ]}},
+                  ]}},
                   { div: { class: 'card-footer', children: [
                     { div: { class: 'topics', children: [
                       { each: $.s._topics, as: 't', children: [
