@@ -184,6 +184,7 @@
   }
   .card-tokens .tok-label { color: #484f58; }
   .card-tokens .tok-val { color: #58a6ff; }
+  .card-tokens .tok-cost { color: #3fb950; }
   .card-footer {
     display: flex;
     justify-content: space-between;
@@ -292,6 +293,20 @@ function formatTokens(n) {
   return String(n);
 }
 
+// Fable 5 pricing, $ per 1M tokens (cache write = 5m TTL rate)
+const PRICE = { input: 10, output: 50, cache_read: 1, cache_write: 12.5 };
+
+function tokenCost(tk) {
+  return ((tk.input || 0) * PRICE.input + (tk.output || 0) * PRICE.output +
+    (tk.cache_read || 0) * PRICE.cache_read + (tk.cache_write || 0) * PRICE.cache_write) / 1e6;
+}
+
+function formatCost(c) {
+  if (!c) return '$0';
+  if (c < 0.01) return '<$0.01';
+  return '$' + (c >= 100 ? c.toFixed(0) : c.toFixed(2));
+}
+
 const STORAGE_KEY = 'claude-sessions-hidden';
 
 function loadHidden() {
@@ -334,9 +349,11 @@ const _raw = (window.SESSIONS_DATA || [])
       cr: formatTokens(tk.cache_read),
     },
     _tokTotal: tk.input + tk.output + tk.cache_write + tk.cache_read,
+    _tokCost: formatCost(tokenCost(tk)),
     _tokTitle:
       'regular: ' + tk.input.toLocaleString() + ' in / ' + tk.output.toLocaleString() + ' out\n' +
-      'cached: ' + tk.cache_read.toLocaleString() + ' read / ' + tk.cache_write.toLocaleString() + ' write',
+      'cached: ' + tk.cache_read.toLocaleString() + ' read / ' + tk.cache_write.toLocaleString() + ' write\n' +
+      'cost (Fable 5): $' + tokenCost(tk).toFixed(4),
   };
   });
 
@@ -414,8 +431,10 @@ blok.mount('#app', {
         const tk = s.tokens || {};
         inp += tk.input || 0; out += tk.output || 0; cw += tk.cache_write || 0; cr += tk.cache_read || 0;
       }
+      const cost = tokenCost({ input: inp, output: out, cache_read: cr, cache_write: cw });
       return 'tokens · regular ' + formatTokens(inp) + ' in / ' + formatTokens(out) +
-        ' out · cached ' + formatTokens(cr) + ' read / ' + formatTokens(cw) + ' write';
+        ' out · cached ' + formatTokens(cr) + ' read / ' + formatTokens(cw) + ' write · ' +
+        formatCost(cost);
     },
   },
 
@@ -544,6 +563,7 @@ blok.mount('#app', {
                       { span: { class: 'tok-label', text: 'cache write ' } },
                       { span: { class: 'tok-val', text: $.s._tok.cw } },
                     ]}},
+                    { span: { class: 'tok-cost', text: $.s._tokCost } },
                   ]}},
                   { div: { class: 'card-footer', children: [
                     { div: { class: 'topics', children: [
