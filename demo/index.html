@@ -45,6 +45,47 @@
   }
   .toggle-hidden:hover { border-color: #58a6ff; color: #58a6ff; }
   .toggle-hidden.active { border-color: #58a6ff; color: #58a6ff; background: #1a2a3a; }
+  .account-chip {
+    background: none;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    font-size: 0.8rem;
+    padding: 4px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .account-chip:hover { border-color: #58a6ff; color: #58a6ff; }
+  .account-chip.active { border-color: #58a6ff; color: #e6edf3; background: #1a2a3a; }
+  .account-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .account-plan {
+    font-size: 0.7rem;
+    color: #8b949e;
+    background: #21262d;
+    padding: 1px 6px;
+    border-radius: 8px;
+  }
+  .card-account {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .serve-hint {
+    font-size: 0.75rem;
+    color: #484f58;
+    font-family: monospace;
+  }
+  .card.card-clickable { cursor: pointer; }
   .search-box {
     width: 100%;
     padding: 10px 14px;
@@ -173,6 +214,17 @@
     color: #8b949e;
     margin-bottom: 10px;
   }
+  .card-tokens {
+    font-size: 0.75rem;
+    font-family: monospace;
+    color: #8b949e;
+    margin-bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .card-tokens .tok-label { color: #484f58; }
+  .card-tokens .tok-val { color: #58a6ff; }
   .card-footer {
     display: flex;
     justify-content: space-between;
@@ -247,15 +299,6 @@
   }
   .copied-toast.show { opacity: 1; }
   .group-hidden .group-path { color: #484f58; text-decoration: line-through; }
-  .demo-banner {
-    background: #1a2a3a;
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    padding: 12px 24px;
-    margin: 0 24px 20px;
-    font-size: 0.85rem;
-    color: #58a6ff;
-  }
 </style>
 </head>
 <body>
@@ -263,7 +306,6 @@
 <div id="app"></div>
 
 <script>
-// Mock data - all session IDs, paths, and content are fictional
 window.SESSIONS_DATA = [
   {
     "id": "a1b2c3d4-1111-4aaa-bbbb-000000000001",
@@ -280,7 +322,12 @@ window.SESSIONS_DATA = [
     "resume": "claude --resume a1b2c3d4-1111-4aaa-bbbb-000000000001",
     "last_analyzed_at": 14,
     "analysis_count": 3,
-    "summaries": []
+    "summaries": [],
+    "account": {
+      "uuid": "aaaaaaaa-1111-2222-3333-444444444444",
+      "email": "work@example.com",
+      "plan": "Max 20x"
+    }
   },
   {
     "id": "a1b2c3d4-2222-4aaa-bbbb-000000000002",
@@ -297,7 +344,12 @@ window.SESSIONS_DATA = [
     "resume": "claude --resume a1b2c3d4-2222-4aaa-bbbb-000000000002",
     "last_analyzed_at": 8,
     "analysis_count": 2,
-    "summaries": []
+    "summaries": [],
+    "account": {
+      "uuid": "bbbbbbbb-1111-2222-3333-444444444444",
+      "email": "personal@example.com",
+      "plan": "Pro"
+    }
   },
   {
     "id": "a1b2c3d4-3333-4aaa-bbbb-000000000003",
@@ -314,7 +366,12 @@ window.SESSIONS_DATA = [
     "resume": "claude --resume a1b2c3d4-3333-4aaa-bbbb-000000000003",
     "last_analyzed_at": 6,
     "analysis_count": 1,
-    "summaries": []
+    "summaries": [],
+    "account": {
+      "uuid": "aaaaaaaa-1111-2222-3333-444444444444",
+      "email": "work@example.com",
+      "plan": "Max 20x"
+    }
   },
   {
     "id": "a1b2c3d4-4444-4aaa-bbbb-000000000004",
@@ -331,7 +388,12 @@ window.SESSIONS_DATA = [
     "resume": "claude --resume a1b2c3d4-4444-4aaa-bbbb-000000000004",
     "last_analyzed_at": 18,
     "analysis_count": 4,
-    "summaries": []
+    "summaries": [],
+    "account": {
+      "uuid": "bbbbbbbb-1111-2222-3333-444444444444",
+      "email": "personal@example.com",
+      "plan": "Pro"
+    }
   },
   {
     "id": "a1b2c3d4-5555-4aaa-bbbb-000000000005",
@@ -348,7 +410,12 @@ window.SESSIONS_DATA = [
     "resume": "claude --resume a1b2c3d4-5555-4aaa-bbbb-000000000005",
     "last_analyzed_at": 7,
     "analysis_count": 2,
-    "summaries": []
+    "summaries": [],
+    "account": {
+      "uuid": "aaaaaaaa-1111-2222-3333-444444444444",
+      "email": "work@example.com",
+      "plan": "Max 20x"
+    }
   },
   {
     "id": "a1b2c3d4-6666-4aaa-bbbb-000000000006",
@@ -365,7 +432,12 @@ window.SESSIONS_DATA = [
     "resume": "claude --resume a1b2c3d4-6666-4aaa-bbbb-000000000006",
     "last_analyzed_at": 4,
     "analysis_count": 1,
-    "summaries": []
+    "summaries": [],
+    "account": {
+      "uuid": "bbbbbbbb-1111-2222-3333-444444444444",
+      "email": "personal@example.com",
+      "plan": "Pro"
+    }
   },
   {
     "id": "a1b2c3d4-7777-4aaa-bbbb-000000000007",
@@ -382,7 +454,12 @@ window.SESSIONS_DATA = [
     "resume": "claude --resume a1b2c3d4-7777-4aaa-bbbb-000000000007",
     "last_analyzed_at": 11,
     "analysis_count": 2,
-    "summaries": []
+    "summaries": [],
+    "account": {
+      "uuid": "aaaaaaaa-1111-2222-3333-444444444444",
+      "email": "work@example.com",
+      "plan": "Max 20x"
+    }
   },
   {
     "id": "a1b2c3d4-8888-4aaa-bbbb-000000000008",
@@ -421,7 +498,29 @@ function relativeTime(dateStr) {
   return dateStr;
 }
 
-const STORAGE_KEY = 'claude-sessions-hidden-demo';
+function formatTokens(n) {
+  if (!n) return '0';
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(n);
+}
+
+// Served over http (serve.ts)? Then clicking a card resumes the session
+// in a new terminal via POST /api/resume. On file:// we only offer copy.
+const SERVER_MODE = location.protocol === 'http:' || location.protocol === 'https:';
+
+function accountHue(key) {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+
+function accountDotStyle(key) {
+  return 'background: hsl(' + accountHue(key) + ', 55%, 60%)';
+}
+
+const STORAGE_KEY = 'claude-sessions-hidden';
 
 function loadHidden() {
   try {
@@ -438,6 +537,7 @@ function saveHidden(sessions, projects) {
 const stored = loadHidden();
 let _debounceTimer = null;
 
+// Pre-process sessions once: sort, build search index, parse topics, build derived fields
 const _raw = (window.SESSIONS_DATA || [])
   .map(s => ({
     ...s,
@@ -445,15 +545,53 @@ const _raw = (window.SESSIONS_DATA || [])
     updated_at: s.updated_at || s.date || '',
   }))
   .sort((a, b) => (b.updated_at || b.started_at).localeCompare(a.updated_at || a.started_at))
-  .map(s => ({
+  .map(s => {
+    const tk = s.tokens || { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+    const acc = s.account || null;
+    return {
     ...s,
-    _search: [s.title, s.summary, s.topics, s.project, s.project_path].join('\0').toLowerCase(),
+    _accKey: (acc && acc.email) || '',
+    _accEmail: (acc && acc.email) || 'untracked account',
+    _accPlan: (acc && acc.plan) || '',
+    _accDotStyle: accountDotStyle((acc && acc.email) || ''),
+    _search: [s.title, s.summary, s.topics, s.project, s.project_path,
+      (acc && acc.email) || '', (acc && acc.plan) || ''].join('\0').toLowerCase(),
     _topics: s.topics.split(',').map(t => t.trim()).filter(Boolean),
     _badgeClass: 'badge badge-' + s.status,
     _msgLabel: s.messages + ' msgs',
     _endPrefix: s.updated_at && s.updated_at !== s.started_at ? (s.status === 'completed' ? 'end' : 'latest') : '',
     _isHidden: false,
-  }));
+    _tok: {
+      in: formatTokens(tk.input),
+      out: formatTokens(tk.output),
+      cw: formatTokens(tk.cache_write),
+      cr: formatTokens(tk.cache_read),
+    },
+    _tokTotal: tk.input + tk.output + tk.cache_write + tk.cache_read,
+    _tokTitle:
+      'regular: ' + tk.input.toLocaleString() + ' in / ' + tk.output.toLocaleString() + ' out\n' +
+      'cached: ' + tk.cache_read.toLocaleString() + ' read / ' + tk.cache_write.toLocaleString() + ' write',
+  };
+  });
+
+// Distinct accounts across all sessions (filter UI only shows for 2+)
+const _accounts = (() => {
+  const map = new Map();
+  for (const s of _raw) {
+    if (!map.has(s._accKey)) {
+      map.set(s._accKey, {
+        key: s._accKey,
+        email: s._accEmail,
+        plan: s._accPlan,
+        dotStyle: s._accDotStyle,
+        count: 0,
+      });
+    }
+    map.get(s._accKey).count++;
+  }
+  return Array.from(map.values()).sort((a, b) => b.count - a.count);
+})();
+const MULTI_ACCOUNT = _accounts.length >= 2;
 
 blok.mount('#app', {
   state: {
@@ -461,9 +599,11 @@ blok.mount('#app', {
     searchInput: '',
     search: '',
     showToast: false,
+    toastMsg: '',
     showHidden: false,
     hiddenSessionIds: stored.sessions,
     hiddenProjectPaths: stored.projects,
+    accountFilter: '__all__',
     tick: 0,
   },
 
@@ -482,6 +622,9 @@ blok.mount('#app', {
     filtered() {
       const q = this.search.trim().toLowerCase();
       let result = this.sessions;
+      if (this.accountFilter !== '__all__') {
+        result = result.filter(s => s._accKey === this.accountFilter);
+      }
       if (q) {
         result = result.filter(s => s._search.includes(q));
       }
@@ -511,6 +654,10 @@ blok.mount('#app', {
         hidden: hiddenPaths.has(path),
       }));
     },
+    accounts() {
+      if (!MULTI_ACCOUNT) return [];
+      return _accounts.map(a => ({ ...a, active: a.key === this.accountFilter }));
+    },
     hiddenCount() {
       return this.hiddenSessionIds.length + this.hiddenProjectPaths.length;
     },
@@ -523,11 +670,48 @@ blok.mount('#app', {
     hiddenBtnText() {
       return (this.showHidden ? 'hide' : 'show') + ' ' + this.hiddenCount + ' hidden';
     },
+    tokensText() {
+      let inp = 0, out = 0, cw = 0, cr = 0;
+      for (const s of this.filtered) {
+        const tk = s.tokens || {};
+        inp += tk.input || 0; out += tk.output || 0; cw += tk.cache_write || 0; cr += tk.cache_read || 0;
+      }
+      return 'tokens · regular ' + formatTokens(inp) + ' in / ' + formatTokens(out) +
+        ' out · cached ' + formatTokens(cr) + ' read / ' + formatTokens(cw) + ' write';
+    },
   },
 
   methods: {
     toggleHidden() {
       this.showHidden = !this.showHidden;
+    },
+    setAccount(key) {
+      this.accountFilter = this.accountFilter === key ? '__all__' : key;
+    },
+    _toast(msg, ms) {
+      this.toastMsg = msg;
+      this.showToast = true;
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => { this.showToast = false; }, ms || 1500);
+    },
+    async resumeSession(s) {
+      if (!SERVER_MODE) return;
+      this._toast('Opening terminal…', 2500);
+      try {
+        const res = await fetch('/api/resume', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-session-tracker': '1' },
+          body: JSON.stringify({ id: s.id }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.ok) {
+          this._toast('Resuming in ' + data.terminal + '…', 2500);
+        } else {
+          this._toast('Error: ' + (data.error || res.status), 3500);
+        }
+      } catch (e) {
+        this._toast('Server error: ' + e.message, 3500);
+      }
     },
     hideSession(id) {
       if (this.hiddenSessionIds.includes(id)) return;
@@ -554,8 +738,7 @@ blok.mount('#app', {
       } else {
         this._fallbackCopy(cmd);
       }
-      this.showToast = true;
-      setTimeout(() => { this.showToast = false; }, 1500);
+      this._toast('Copied to clipboard!');
     },
     _fallbackCopy(text) {
       const ta = document.createElement('textarea');
@@ -573,9 +756,9 @@ blok.mount('#app', {
     div: { children: [
       { div: { class: 'header', children: [
         { h1: 'Claude Sessions' },
-        { div: { class: 'demo-banner', text: 'Demo - all session data below is fictional' } },
         { div: { class: 'header-row', children: [
           { span: { class: 'stats', text: $.statsText } },
+          { span: { class: 'stats', text: $.tokensText } },
           { when: $.hiddenCount, children: [
             { button: {
               class: ['toggle-hidden', { active: $.showHidden }],
@@ -583,7 +766,33 @@ blok.mount('#app', {
               text: $.hiddenBtnText,
             }},
           ]},
+          ...(SERVER_MODE ? [] : [
+            { span: {
+              class: 'serve-hint',
+              bind: { title: 'Serve the UI locally to resume sessions by clicking their card' },
+              text: 'tip: bun ~/.claude/session-tracker/serve.ts → click a card to resume it in a terminal',
+            }},
+          ]),
         ]}},
+        ...(MULTI_ACCOUNT ? [
+          { div: { class: 'header-row', children: [
+            { each: $.accounts, as: 'acc', key: 'key', children: [
+              { button: {
+                class: ['account-chip', { active: $.acc.active }],
+                click: 'setAccount(acc.key)',
+                bind: { title: 'Filter sessions by this account' },
+                children: [
+                  { span: { class: 'account-dot', bind: { style: $.acc.dotStyle } } },
+                  { span: { text: $.acc.email } },
+                  { when: $.acc.plan, children: [
+                    { span: { class: 'account-plan', text: $.acc.plan } },
+                  ]},
+                  { span: { class: 'group-count', text: $.acc.count } },
+                ],
+              }},
+            ]},
+          ]}},
+        ] : []),
         { input: {
           class: 'search-box',
           type: 'text',
@@ -617,7 +826,12 @@ blok.mount('#app', {
             ]}},
             { div: { class: 'cards', children: [
               { each: $.group.sessions, as: 's', key: 'id', children: [
-                { div: { class: { card: true, 'card-hidden': $.s._isHidden }, children: [
+                { div: {
+                  class: { card: true, 'card-hidden': $.s._isHidden, 'card-clickable': SERVER_MODE },
+                  ...(SERVER_MODE
+                    ? { click: 'resumeSession(s)', bind: { title: 'Resume this session in a new terminal' } }
+                    : {}),
+                  children: [
                   { div: { class: 'card-top', children: [
                     { div: { class: 'card-dates', children: [
                       { span: { class: 'card-date', bind: { title: $.s.started_at }, text: $.s._startLabel } },
@@ -626,6 +840,12 @@ blok.mount('#app', {
                       ]},
                     ]}},
                     { div: { class: 'card-meta', children: [
+                      ...(MULTI_ACCOUNT ? [
+                        { span: { class: 'card-account', bind: { title: $.s._accEmail }, children: [
+                          { span: { class: 'account-dot', bind: { style: $.s._accDotStyle } } },
+                          { span: { text: $.s._accPlan } },
+                        ]}},
+                      ] : []),
                       { span: { text: $.s.branch } },
                       { span: { text: $.s._msgLabel } },
                       { span: { class: $.s._badgeClass, text: $.s.status } },
@@ -633,6 +853,24 @@ blok.mount('#app', {
                   ]}},
                   { div: { class: 'card-title', text: $.s.title } },
                   { div: { class: 'card-summary', text: $.s.summary } },
+                  { div: { class: 'card-tokens', bind: { title: $.s._tokTitle }, children: [
+                    { span: { children: [
+                      { span: { class: 'tok-label', text: 'in ' } },
+                      { span: { class: 'tok-val', text: $.s._tok.in } },
+                    ]}},
+                    { span: { children: [
+                      { span: { class: 'tok-label', text: 'out ' } },
+                      { span: { class: 'tok-val', text: $.s._tok.out } },
+                    ]}},
+                    { span: { children: [
+                      { span: { class: 'tok-label', text: 'cache read ' } },
+                      { span: { class: 'tok-val', text: $.s._tok.cr } },
+                    ]}},
+                    { span: { children: [
+                      { span: { class: 'tok-label', text: 'cache write ' } },
+                      { span: { class: 'tok-val', text: $.s._tok.cw } },
+                    ]}},
+                  ]}},
                   { div: { class: 'card-footer', children: [
                     { div: { class: 'topics', children: [
                       { each: $.s._topics, as: 't', children: [
@@ -643,20 +881,20 @@ blok.mount('#app', {
                       { when: $.s._isHidden, children: [
                         { button: {
                           class: 'restore-btn',
-                          click: 'restoreSession(s.id)',
+                          'click.stop': 'restoreSession(s.id)',
                           text: 'restore',
                         }},
                       ]},
                       { when: $.not.s._isHidden, children: [
                         { button: {
                           class: 'hide-btn',
-                          click: 'hideSession(s.id)',
+                          'click.stop': 'hideSession(s.id)',
                           text: 'hide',
                         }},
                       ]},
                       { button: {
                         class: 'resume-btn',
-                        click: 'copyResume(s)',
+                        'click.stop': 'copyResume(s)',
                         bind: { title: 'Copy resume command' },
                         text: 'copy resume cmd',
                       }},
@@ -673,7 +911,7 @@ blok.mount('#app', {
         ]},
       ]}},
 
-      { div: { class: ['copied-toast', { show: $.showToast }], text: 'Copied to clipboard!' } },
+      { div: { class: ['copied-toast', { show: $.showToast }], text: $.toastMsg } },
     ]},
   }),
 });

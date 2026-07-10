@@ -45,6 +45,47 @@
   }
   .toggle-hidden:hover { border-color: #58a6ff; color: #58a6ff; }
   .toggle-hidden.active { border-color: #58a6ff; color: #58a6ff; background: #1a2a3a; }
+  .account-chip {
+    background: none;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    font-size: 0.8rem;
+    padding: 4px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .account-chip:hover { border-color: #58a6ff; color: #58a6ff; }
+  .account-chip.active { border-color: #58a6ff; color: #e6edf3; background: #1a2a3a; }
+  .account-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .account-plan {
+    font-size: 0.7rem;
+    color: #8b949e;
+    background: #21262d;
+    padding: 1px 6px;
+    border-radius: 8px;
+  }
+  .card-account {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .serve-hint {
+    font-size: 0.75rem;
+    color: #484f58;
+    font-family: monospace;
+  }
+  .card.card-clickable { cursor: pointer; }
   .search-box {
     width: 100%;
     padding: 10px 14px;
@@ -292,6 +333,20 @@ function formatTokens(n) {
   return String(n);
 }
 
+// Served over http (serve.ts)? Then clicking a card resumes the session
+// in a new terminal via POST /api/resume. On file:// we only offer copy.
+const SERVER_MODE = location.protocol === 'http:' || location.protocol === 'https:';
+
+function accountHue(key) {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+
+function accountDotStyle(key) {
+  return 'background: hsl(' + accountHue(key) + ', 55%, 60%)';
+}
+
 const STORAGE_KEY = 'claude-sessions-hidden';
 
 function loadHidden() {
@@ -319,9 +374,15 @@ const _raw = (window.SESSIONS_DATA || [])
   .sort((a, b) => (b.updated_at || b.started_at).localeCompare(a.updated_at || a.started_at))
   .map(s => {
     const tk = s.tokens || { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+    const acc = s.account || null;
     return {
     ...s,
-    _search: [s.title, s.summary, s.topics, s.project, s.project_path].join('\0').toLowerCase(),
+    _accKey: (acc && acc.email) || '',
+    _accEmail: (acc && acc.email) || 'untracked account',
+    _accPlan: (acc && acc.plan) || '',
+    _accDotStyle: accountDotStyle((acc && acc.email) || ''),
+    _search: [s.title, s.summary, s.topics, s.project, s.project_path,
+      (acc && acc.email) || '', (acc && acc.plan) || ''].join('\0').toLowerCase(),
     _topics: s.topics.split(',').map(t => t.trim()).filter(Boolean),
     _badgeClass: 'badge badge-' + s.status,
     _msgLabel: s.messages + ' msgs',
@@ -340,15 +401,36 @@ const _raw = (window.SESSIONS_DATA || [])
   };
   });
 
+// Distinct accounts across all sessions (filter UI only shows for 2+)
+const _accounts = (() => {
+  const map = new Map();
+  for (const s of _raw) {
+    if (!map.has(s._accKey)) {
+      map.set(s._accKey, {
+        key: s._accKey,
+        email: s._accEmail,
+        plan: s._accPlan,
+        dotStyle: s._accDotStyle,
+        count: 0,
+      });
+    }
+    map.get(s._accKey).count++;
+  }
+  return Array.from(map.values()).sort((a, b) => b.count - a.count);
+})();
+const MULTI_ACCOUNT = _accounts.length >= 2;
+
 blok.mount('#app', {
   state: {
     sessions: _raw,
     searchInput: '',
     search: '',
     showToast: false,
+    toastMsg: '',
     showHidden: false,
     hiddenSessionIds: stored.sessions,
     hiddenProjectPaths: stored.projects,
+    accountFilter: '__all__',
     tick: 0,
   },
 
@@ -367,6 +449,9 @@ blok.mount('#app', {
     filtered() {
       const q = this.search.trim().toLowerCase();
       let result = this.sessions;
+      if (this.accountFilter !== '__all__') {
+        result = result.filter(s => s._accKey === this.accountFilter);
+      }
       if (q) {
         result = result.filter(s => s._search.includes(q));
       }
@@ -396,6 +481,10 @@ blok.mount('#app', {
         hidden: hiddenPaths.has(path),
       }));
     },
+    accounts() {
+      if (!MULTI_ACCOUNT) return [];
+      return _accounts.map(a => ({ ...a, active: a.key === this.accountFilter }));
+    },
     hiddenCount() {
       return this.hiddenSessionIds.length + this.hiddenProjectPaths.length;
     },
@@ -423,6 +512,34 @@ blok.mount('#app', {
     toggleHidden() {
       this.showHidden = !this.showHidden;
     },
+    setAccount(key) {
+      this.accountFilter = this.accountFilter === key ? '__all__' : key;
+    },
+    _toast(msg, ms) {
+      this.toastMsg = msg;
+      this.showToast = true;
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => { this.showToast = false; }, ms || 1500);
+    },
+    async resumeSession(s) {
+      if (!SERVER_MODE) return;
+      this._toast('Opening terminal…', 2500);
+      try {
+        const res = await fetch('/api/resume', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-session-tracker': '1' },
+          body: JSON.stringify({ id: s.id }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.ok) {
+          this._toast('Resuming in ' + data.terminal + '…', 2500);
+        } else {
+          this._toast('Error: ' + (data.error || res.status), 3500);
+        }
+      } catch (e) {
+        this._toast('Server error: ' + e.message, 3500);
+      }
+    },
     hideSession(id) {
       if (this.hiddenSessionIds.includes(id)) return;
       this.hiddenSessionIds = [...this.hiddenSessionIds, id];
@@ -448,8 +565,7 @@ blok.mount('#app', {
       } else {
         this._fallbackCopy(cmd);
       }
-      this.showToast = true;
-      setTimeout(() => { this.showToast = false; }, 1500);
+      this._toast('Copied to clipboard!');
     },
     _fallbackCopy(text) {
       const ta = document.createElement('textarea');
@@ -477,7 +593,33 @@ blok.mount('#app', {
               text: $.hiddenBtnText,
             }},
           ]},
+          ...(SERVER_MODE ? [] : [
+            { span: {
+              class: 'serve-hint',
+              bind: { title: 'Serve the UI locally to resume sessions by clicking their card' },
+              text: 'tip: bun ~/.claude/session-tracker/serve.ts → click a card to resume it in a terminal',
+            }},
+          ]),
         ]}},
+        ...(MULTI_ACCOUNT ? [
+          { div: { class: 'header-row', children: [
+            { each: $.accounts, as: 'acc', key: 'key', children: [
+              { button: {
+                class: ['account-chip', { active: $.acc.active }],
+                click: 'setAccount(acc.key)',
+                bind: { title: 'Filter sessions by this account' },
+                children: [
+                  { span: { class: 'account-dot', bind: { style: $.acc.dotStyle } } },
+                  { span: { text: $.acc.email } },
+                  { when: $.acc.plan, children: [
+                    { span: { class: 'account-plan', text: $.acc.plan } },
+                  ]},
+                  { span: { class: 'group-count', text: $.acc.count } },
+                ],
+              }},
+            ]},
+          ]}},
+        ] : []),
         { input: {
           class: 'search-box',
           type: 'text',
@@ -511,7 +653,12 @@ blok.mount('#app', {
             ]}},
             { div: { class: 'cards', children: [
               { each: $.group.sessions, as: 's', key: 'id', children: [
-                { div: { class: { card: true, 'card-hidden': $.s._isHidden }, children: [
+                { div: {
+                  class: { card: true, 'card-hidden': $.s._isHidden, 'card-clickable': SERVER_MODE },
+                  ...(SERVER_MODE
+                    ? { click: 'resumeSession(s)', bind: { title: 'Resume this session in a new terminal' } }
+                    : {}),
+                  children: [
                   { div: { class: 'card-top', children: [
                     { div: { class: 'card-dates', children: [
                       { span: { class: 'card-date', bind: { title: $.s.started_at }, text: $.s._startLabel } },
@@ -520,6 +667,12 @@ blok.mount('#app', {
                       ]},
                     ]}},
                     { div: { class: 'card-meta', children: [
+                      ...(MULTI_ACCOUNT ? [
+                        { span: { class: 'card-account', bind: { title: $.s._accEmail }, children: [
+                          { span: { class: 'account-dot', bind: { style: $.s._accDotStyle } } },
+                          { span: { text: $.s._accPlan } },
+                        ]}},
+                      ] : []),
                       { span: { text: $.s.branch } },
                       { span: { text: $.s._msgLabel } },
                       { span: { class: $.s._badgeClass, text: $.s.status } },
@@ -555,20 +708,20 @@ blok.mount('#app', {
                       { when: $.s._isHidden, children: [
                         { button: {
                           class: 'restore-btn',
-                          click: 'restoreSession(s.id)',
+                          'click.stop': 'restoreSession(s.id)',
                           text: 'restore',
                         }},
                       ]},
                       { when: $.not.s._isHidden, children: [
                         { button: {
                           class: 'hide-btn',
-                          click: 'hideSession(s.id)',
+                          'click.stop': 'hideSession(s.id)',
                           text: 'hide',
                         }},
                       ]},
                       { button: {
                         class: 'resume-btn',
-                        click: 'copyResume(s)',
+                        'click.stop': 'copyResume(s)',
                         bind: { title: 'Copy resume command' },
                         text: 'copy resume cmd',
                       }},
@@ -585,7 +738,7 @@ blok.mount('#app', {
         ]},
       ]}},
 
-      { div: { class: ['copied-toast', { show: $.showToast }], text: 'Copied to clipboard!' } },
+      { div: { class: ['copied-toast', { show: $.showToast }], text: $.toastMsg } },
     ]},
   }),
 });

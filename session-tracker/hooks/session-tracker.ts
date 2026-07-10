@@ -12,11 +12,14 @@ import { mkdirSync, statSync, copyFileSync, unlinkSync } from "fs";
 import { homedir } from "os";
 import { join, basename } from "path";
 
-const BASE_DIR = join(homedir(), ".claude", "session-tracker");
+const BASE_DIR = process.env.SESSION_TRACKER_DIR
+  ?? join(homedir(), ".claude", "session-tracker");
 const SESSIONS_JS_FILE = join(BASE_DIR, "sessions-data.js");
 const SUMMARIES_FILENAME = "SESSION_SUMMARIES.md";
 const WEB_UI_SOURCE = join(import.meta.dir, "..", "web", "index.html");
 const WEB_UI_TARGET = join(BASE_DIR, "index.html");
+const SERVER_SOURCE = join(import.meta.dir, "..", "server", "serve.ts");
+const SERVER_TARGET = join(BASE_DIR, "serve.ts");
 
 const FIRST_THRESHOLD = 1;
 const RE_ANALYSIS_INTERVAL = 5;
@@ -57,6 +60,12 @@ interface TokenUsage {
   cache_read: number;   // cache_read_input_tokens (cache hits)
 }
 
+interface AccountInfo {
+  uuid: string;
+  email: string;
+  plan: string;
+}
+
 interface Session {
   id: string;
   started_at: string;
@@ -74,6 +83,7 @@ interface Session {
   analysis_count: number;
   summaries: string[];
   tokens: TokenUsage;
+  account: AccountInfo | null;
 }
 
 interface HookInput {
@@ -131,6 +141,7 @@ async function loadSessions(): Promise<Session[]> {
         }
         if (!s.summaries) s.summaries = [];
         if (!s.tokens) s.tokens = { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+        if (s.account === undefined) s.account = null;
       }
       return sessions;
     } catch {
@@ -350,6 +361,46 @@ async function consolidateSummaries(summaries: string[]): Promise<SummaryResult>
   return callCli(prompt);
 }
 
+// -- Account / subscription --
+
+function planLabel(oa: Record<string, unknown>): string {
+  const tier = String(oa.organizationRateLimitTier ?? oa.userRateLimitTier ?? "");
+  const max = tier.match(/max_(\d+x)/);
+  if (max) return `Max ${max[1]}`;
+  const orgType = String(oa.organizationType ?? "");
+  if (orgType === "claude_max" || tier.includes("max")) return "Max";
+  if (orgType === "claude_pro" || tier.includes("pro")) return "Pro";
+  if (orgType === "claude_enterprise") return "Enterprise";
+  if (orgType === "claude_team") return "Team";
+  if (String(oa.billingType ?? "").includes("api")) return "API";
+  return orgType || "unknown";
+}
+
+/**
+ * Reads the account active for THIS Claude Code process from .claude.json.
+ * Users running multiple subscriptions typically separate them via
+ * CLAUDE_CONFIG_DIR, which the hook inherits - so each session gets
+ * stamped with the account it actually ran under.
+ */
+async function readAccount(): Promise<AccountInfo | null> {
+  const configDir = process.env.CLAUDE_CONFIG_DIR;
+  const configFile = configDir
+    ? join(configDir, ".claude.json")
+    : join(homedir(), ".claude.json");
+  try {
+    const config = await Bun.file(configFile).json();
+    const oa = config.oauthAccount;
+    if (!oa || typeof oa !== "object") return null;
+    return {
+      uuid: String(oa.accountUuid ?? ""),
+      email: String(oa.emailAddress ?? ""),
+      plan: planLabel(oa),
+    };
+  } catch {
+    return null;
+  }
+}
+
 // -- Git --
 
 async function getGitBranch(cwd: string): Promise<string> {
@@ -479,23 +530,28 @@ function shouldAnalyze(msgCount: number, lastAnalyzedAt: number): boolean {
 
 // -- Auto-provision web UI --
 
-function provisionWebUI(): void {
-  mkdirSync(BASE_DIR, { recursive: true });
+function provisionFile(source: string, target: string): void {
   try {
-    const srcStat = statSync(WEB_UI_SOURCE);
+    const srcStat = statSync(source);
     let needsCopy = true;
     try {
-      const dstStat = statSync(WEB_UI_TARGET);
+      const dstStat = statSync(target);
       needsCopy = srcStat.mtimeMs > dstStat.mtimeMs || srcStat.size !== dstStat.size;
     } catch {
       // Target doesn't exist
     }
     if (needsCopy) {
-      copyFileSync(WEB_UI_SOURCE, WEB_UI_TARGET);
+      copyFileSync(source, target);
     }
   } catch {
     // Source not found - skip (e.g. running outside plugin context)
   }
+}
+
+function provisionWebUI(): void {
+  mkdirSync(BASE_DIR, { recursive: true });
+  provisionFile(WEB_UI_SOURCE, WEB_UI_TARGET);
+  provisionFile(SERVER_SOURCE, SERVER_TARGET);
 }
 
 // -- Main --
@@ -591,6 +647,8 @@ async function main(): Promise<void> {
 
   const now = new Date().toISOString().replace("T", " ").slice(0, 16);
   const branch = await getGitBranch(cwd);
+  // First stamp wins: the session belongs to the account it started under
+  const account = existing?.account ?? await readAccount();
   const projectName = cwd ? basename(cwd) : "unknown";
   const isFirstAnalysis = effectiveLastAnalyzed === 0;
   const priorSummaries = isTranscriptReset ? [] : (existing?.summaries ?? []);
@@ -671,6 +729,7 @@ async function main(): Promise<void> {
     analysis_count: analysisCount,
     summaries: updatedSummaries,
     tokens,
+    account: freshExisting?.account ?? account,
   };
 
   if (freshExisting) {

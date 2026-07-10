@@ -10,7 +10,9 @@ Automatically tracks and summarizes Claude Code sessions using Claude Haiku. Pro
 - **AI summaries** - Claude Haiku generates title, summary, topics, and status
 - **Per-project summaries** - `SESSION_SUMMARIES.md` in each project directory for future session context
 - **Web UI** - Search, filter, hide/restore sessions grouped by project
+- **Multi-account aware** - Each session is stamped with the account/subscription it ran under (email + plan); filter sessions by account in the UI
 - **Resume commands** - One-click copy of `claude --resume <id>` commands
+- **Click-to-resume** - With the optional local server, clicking a session card opens a new terminal already resuming that session
 - **Session history skill** - Claude can read past session context via the plugin skill
 
 ## Requirements
@@ -54,6 +56,25 @@ open ~/.claude/session-tracker/index.html
 ```
 
 The web UI is auto-provisioned by the hook on first run. Features: search, project grouping, status badges, hide/restore, copy resume commands.
+
+### Click-to-resume (optional local server)
+
+To resume sessions by clicking their card, serve the UI locally instead of opening the file:
+
+```bash
+bun ~/.claude/session-tracker/serve.ts
+# then open http://127.0.0.1:4457
+```
+
+Clicking a card opens a new terminal window (Windows Terminal/cmd, Terminal.app, or gnome-terminal/konsole/xterm) already running `claude --resume <id>` in that session's project directory. The server binds to `127.0.0.1` only, and `/api/resume` only accepts session ids present in your own tracked data (the working directory always comes from the stored session, never from the request). Override the port with `SESSION_TRACKER_PORT`.
+
+`serve.ts` is auto-provisioned to `~/.claude/session-tracker/` by the hook, same as the UI. Opening `index.html` directly (file://) keeps working - you just get copy-only buttons instead of click-to-resume.
+
+### Multiple accounts / subscriptions
+
+Every session is stamped with the account it ran under - email and plan (`Max 20x`, `Pro`, `Team`, ...) - read from the `.claude.json` of the Claude Code process that fired the hook (`CLAUDE_CONFIG_DIR` is respected, so per-account config dirs are attributed correctly).
+
+If your data contains sessions from 2+ accounts, the web UI shows one filter chip per account (click to filter, click again to clear) and each card gets a colored account dot. Sessions tracked before this feature existed appear as "untracked account".
 
 ### Configuration
 
