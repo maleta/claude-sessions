@@ -604,11 +604,19 @@ blok.mount('#app', {
     hiddenSessionIds: stored.sessions,
     hiddenProjectPaths: stored.projects,
     accountFilter: '__all__',
+    canResume: false,
     tick: 0,
   },
 
   init() {
     setInterval(() => { this.tick++; }, 60000);
+    if (SERVER_MODE) {
+      // Older/read-only servers may not allow resume; default to copy-only.
+      fetch('/api/config')
+        .then(r => r.ok ? r.json() : {})
+        .then(c => { this.canResume = !!c.resume; })
+        .catch(() => {});
+    }
   },
 
   watch: {
@@ -658,6 +666,9 @@ blok.mount('#app', {
       if (!MULTI_ACCOUNT) return [];
       return _accounts.map(a => ({ ...a, active: a.key === this.accountFilter }));
     },
+    resumeHint() {
+      return this.canResume ? 'Resume this session in a new terminal' : '';
+    },
     hiddenCount() {
       return this.hiddenSessionIds.length + this.hiddenProjectPaths.length;
     },
@@ -695,7 +706,7 @@ blok.mount('#app', {
       this._toastTimer = setTimeout(() => { this.showToast = false; }, ms || 1500);
     },
     async resumeSession(s) {
-      if (!SERVER_MODE) return;
+      if (!this.canResume) return;
       this._toast('Opening terminal…', 2500);
       try {
         const res = await fetch('/api/resume', {
@@ -827,9 +838,9 @@ blok.mount('#app', {
             { div: { class: 'cards', children: [
               { each: $.group.sessions, as: 's', key: 'id', children: [
                 { div: {
-                  class: { card: true, 'card-hidden': $.s._isHidden, 'card-clickable': SERVER_MODE },
+                  class: { card: true, 'card-hidden': $.s._isHidden, 'card-clickable': $.canResume },
                   ...(SERVER_MODE
-                    ? { click: 'resumeSession(s)', bind: { title: 'Resume this session in a new terminal' } }
+                    ? { click: 'resumeSession(s)', bind: { title: $.resumeHint } }
                     : {}),
                   children: [
                   { div: { class: 'card-top', children: [

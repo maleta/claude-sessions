@@ -22,6 +22,12 @@ const BASE_DIR = process.env.SESSION_TRACKER_DIR
   ?? join(homedir(), ".claude", "session-tracker");
 const SESSIONS_JS_FILE = join(BASE_DIR, "sessions-data.js");
 const PORT = Number(process.env.SESSION_TRACKER_PORT ?? 4457);
+// Read-only mode: browse/filter only, no resume endpoint. For serving the
+// UI from a machine that doesn't hold the sessions (e.g. a NAS container).
+const READONLY = process.env.SESSION_TRACKER_READONLY === "1";
+// Bind address. Keep the localhost default; set 0.0.0.0 explicitly when
+// running in a container (pair it with READONLY=1 unless you trust the LAN).
+const HOST = process.env.SESSION_TRACKER_HOST ?? "127.0.0.1";
 
 interface StoredSession {
   id: string;
@@ -127,6 +133,9 @@ function json(body: unknown, status = 200): Response {
 }
 
 async function handleResume(req: Request): Promise<Response> {
+  if (READONLY) {
+    return json({ error: "resume disabled (read-only server)" }, 403);
+  }
   // Custom header forces a CORS preflight, which same-origin-only serving
   // rejects - so random web pages can't POST here from the browser.
   if (req.headers.get("x-session-tracker") !== "1") {
@@ -190,10 +199,13 @@ function serveStatic(pathname: string): Response {
 }
 
 Bun.serve({
-  hostname: "127.0.0.1",
+  hostname: HOST,
   port: PORT,
   async fetch(req) {
     const url = new URL(req.url);
+    if (url.pathname === "/api/config" && req.method === "GET") {
+      return json({ resume: !READONLY });
+    }
     if (url.pathname === "/api/resume" && req.method === "POST") {
       return handleResume(req);
     }
@@ -204,5 +216,9 @@ Bun.serve({
   },
 });
 
-console.log(`Claude Sessions UI: http://127.0.0.1:${PORT}`);
-console.log("Click a session card to resume it in a new terminal window.");
+console.log(`Claude Sessions UI: http://${HOST}:${PORT}`);
+if (READONLY) {
+  console.log("Read-only mode: resume disabled.");
+} else {
+  console.log("Click a session card to resume it in a new terminal window.");
+}

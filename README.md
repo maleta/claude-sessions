@@ -70,6 +70,23 @@ Clicking a card opens a new terminal window (Windows Terminal/cmd, Terminal.app,
 
 `serve.ts` is auto-provisioned to `~/.claude/session-tracker/` by the hook, same as the UI. Opening `index.html` directly (file://) keeps working - you just get copy-only buttons instead of click-to-resume.
 
+Server environment variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SESSION_TRACKER_PORT` | `4457` | Listen port |
+| `SESSION_TRACKER_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` for containers) |
+| `SESSION_TRACKER_READONLY` | unset | `1` disables `/api/resume` (browse/copy only) |
+| `SESSION_TRACKER_DIR` | `~/.claude/session-tracker` | Data directory |
+
+Since the hook provisions `index.html` and `serve.ts` into the data directory, you can serve the UI read-only from another machine (e.g. a NAS container) by syncing that directory and running:
+
+```bash
+SESSION_TRACKER_DIR=/data SESSION_TRACKER_HOST=0.0.0.0 SESSION_TRACKER_READONLY=1 bun /data/serve.ts
+```
+
+The UI asks the server (`GET /api/config`) whether resume is available and falls back to copy-only buttons when it isn't.
+
 ### Multiple accounts / subscriptions
 
 Every session is stamped with the account it ran under - email and plan (`Max 20x`, `Pro`, `Team`, ...) - read from the `.claude.json` of the Claude Code process that fired the hook (`CLAUDE_CONFIG_DIR` is respected, so per-account config dirs are attributed correctly).
