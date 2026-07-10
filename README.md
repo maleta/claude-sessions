@@ -88,6 +88,17 @@ SESSION_TRACKER_DIR=/data SESSION_TRACKER_HOST=0.0.0.0 SESSION_TRACKER_READONLY=
 
 The UI asks the server (`GET /api/config`) whether resume is available and falls back to copy-only buttons when it isn't.
 
+API endpoints:
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/` , `/index.html` | GET | Web UI (falls back to the repo copy if the data dir has none) |
+| `/sessions-data.js` | GET | Session data consumed by the UI |
+| `/api/config` | GET | `{ "resume": bool }` - feature discovery for the UI |
+| `/api/resume` | POST | `{ "id": "<session-id>" }` - opens a terminal resuming that session |
+
+`/api/resume` safety model: localhost bind by default, a required custom header (`x-session-tracker: 1`) forces a CORS preflight so web pages on other origins can't trigger it, the session id must match the tracked data (400 on malformed, 404 on unknown), and the working directory comes from the stored session - never from the request. Terminal launchers per platform: `wt`/`cmd` on Windows (Windows Terminal is an app-execution alias that Bun can neither stat nor spawn, so it's detected with `where.exe` and launched through `cmd /c start`), `Terminal.app` via osascript on macOS, `x-terminal-emulator`/`gnome-terminal`/`konsole`/`xterm` on Linux.
+
 ### Backfill your history
 
 The tracker only records sessions from the moment it's installed. To import everything you did before, run (from the plugin directory):
@@ -121,22 +132,43 @@ Disable `SESSION_SUMMARIES.md` for a specific project by adding to `<project>/.c
 ## Data flow
 
 ```
-Hook fires (Stop/SessionEnd)
-  |
-  v  (count messages from transcript)
-  |
-  v  (check threshold: 1+ messages first time, then every 5 more)
-  |
-  v  (call Haiku via claude -p for summary)
-  |
-  v
+Hook fires (Stop/SessionEnd)                 scripts/backfill.ts (one-shot)
+  |                                             |
+  v  (count messages from transcript)           v  (scan ~/.claude/projects/**/*.jsonl)
+  |                                             |
+  v  (threshold: 1st message, then every 5)     v  (skip tracked/empty transcripts)
+  |                                             |
+  v  (Haiku summary via claude -p)              v  (same Haiku analysis)
+  |                                             |
+  v  (stamp account from .claude.json)          v  (account: null - not recorded)
+  |                                             |
+  +---------------------+-----------------------+
+                        v
 ~/.claude/session-tracker/sessions-data.js    <-- single source of truth
-  |
-  v  (also written per project)
-  |
-  v
-<project>/SESSION_SUMMARIES.md                <-- per-project context
+        |                       |
+        v (live hook only)      v (serve.ts, optional)
+<project>/SESSION_SUMMARIES.md  http://127.0.0.1:4457 (click-to-resume,
+    per-project context           or READONLY=1 remote viewer)
 ```
+
+## Session data format
+
+Each entry in `sessions-data.js` is a JSON object:
+
+| Field | Meaning |
+|---|---|
+| `id` | Session UUID (= transcript filename, what `claude --resume` takes) |
+| `started_at` / `updated_at` | `YYYY-MM-DD HH:mm` timestamps |
+| `project` / `project_path` | Directory name / absolute path the session ran in |
+| `branch` | Git branch at analysis time (`n/a` outside a repo) |
+| `title` / `summary` / `topics` / `status` | Haiku analysis (`status`: completed, in-progress, exploring, debugging) |
+| `messages` | Count of real user messages (tool results excluded) |
+| `tokens` | `{ input, output, cache_write, cache_read }` accumulated from the transcript |
+| `resume` | Ready-to-paste `claude --resume <id>` command |
+| `account` | `{ uuid, email, plan }` of the subscription the session ran under, or `null` if unknown (pre-feature or backfilled) |
+| `last_analyzed_at` / `analysis_count` / `summaries` | Incremental-analysis bookkeeping used by the hook |
+
+Old data files migrate transparently: missing fields are defaulted on load.
 
 ## Uninstall
 
