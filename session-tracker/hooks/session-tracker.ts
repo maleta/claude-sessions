@@ -53,20 +53,20 @@ Return ONLY valid JSON, nothing else.`;
 
 // -- Types --
 
-interface TokenUsage {
+export interface TokenUsage {
   input: number;        // uncached input tokens (full price)
   output: number;       // output tokens
   cache_write: number;  // cache_creation_input_tokens
   cache_read: number;   // cache_read_input_tokens (cache hits)
 }
 
-interface AccountInfo {
+export interface AccountInfo {
   uuid: string;
   email: string;
   plan: string;
 }
 
-interface Session {
+export interface Session {
   id: string;
   started_at: string;
   updated_at: string;
@@ -93,7 +93,7 @@ interface HookInput {
   session_end_reason?: string;
 }
 
-interface SummaryResult {
+export interface SummaryResult {
   title?: string;
   summary?: string;
   topics?: string;
@@ -124,7 +124,7 @@ interface TranscriptEntry {
 
 // -- Data I/O --
 
-async function loadSessions(): Promise<Session[]> {
+export async function loadSessions(): Promise<Session[]> {
   const file = Bun.file(SESSIONS_JS_FILE);
   if (await file.exists()) {
     try {
@@ -151,7 +151,7 @@ async function loadSessions(): Promise<Session[]> {
   return [];
 }
 
-async function saveSessions(sessions: Session[]): Promise<void> {
+export async function saveSessions(sessions: Session[]): Promise<void> {
   mkdirSync(BASE_DIR, { recursive: true });
   const content = "window.SESSIONS_DATA = " + JSON.stringify(sessions, null, 2) + ";\n";
   await Bun.write(SESSIONS_JS_FILE, content);
@@ -185,7 +185,7 @@ function extractText(content: string | ContentBlock[]): string {
   return "";
 }
 
-async function countUserMessages(transcriptPath: string): Promise<number> {
+export async function countUserMessages(transcriptPath: string): Promise<number> {
   let count = 0;
   try {
     const text = await Bun.file(transcriptPath).text();
@@ -221,7 +221,7 @@ async function countUserMessages(transcriptPath: string): Promise<number> {
   return count;
 }
 
-async function computeTokenUsage(transcriptPath: string): Promise<TokenUsage> {
+export async function computeTokenUsage(transcriptPath: string): Promise<TokenUsage> {
   const totals: TokenUsage = { input: 0, output: 0, cache_write: 0, cache_read: 0 };
   // Streamed multi-block turns repeat the same message id across several lines,
   // and output_tokens can grow between them; keep the LAST (final) usage per id.
@@ -260,7 +260,7 @@ function addUsage(totals: TokenUsage, usage: Usage): void {
   totals.cache_read += usage.cache_read_input_tokens ?? 0;
 }
 
-async function buildConversationText(
+export async function buildConversationText(
   transcriptPath: string,
   skipUserMessages = 0
 ): Promise<string> {
@@ -350,7 +350,7 @@ async function callCli(prompt: string): Promise<SummaryResult> {
   throw new Error(`No JSON found in response: ${text.slice(0, 200)}`);
 }
 
-async function analyzeConversation(conversationText: string): Promise<SummaryResult> {
+export async function analyzeConversation(conversationText: string): Promise<SummaryResult> {
   const prompt = SUMMARY_PROMPT.replace("{conversation}", conversationText);
   return callCli(prompt);
 }
@@ -752,4 +752,7 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+// Only run as a hook when executed directly (backfill.ts imports this file)
+if (import.meta.main) {
+  main();
+}

@@ -13,6 +13,7 @@ Automatically tracks and summarizes Claude Code sessions using Claude Haiku. Pro
 - **Multi-account aware** - Each session is stamped with the account/subscription it ran under (email + plan); filter sessions by account in the UI
 - **Resume commands** - One-click copy of `claude --resume <id>` commands
 - **Click-to-resume** - With the optional local server, clicking a session card opens a new terminal already resuming that session
+- **Backfill** - One command imports your whole pre-existing transcript history into the tracker
 - **Session history skill** - Claude can read past session context via the plugin skill
 
 ## Requirements
@@ -86,6 +87,18 @@ SESSION_TRACKER_DIR=/data SESSION_TRACKER_HOST=0.0.0.0 SESSION_TRACKER_READONLY=
 ```
 
 The UI asks the server (`GET /api/config`) whether resume is available and falls back to copy-only buttons when it isn't.
+
+### Backfill your history
+
+The tracker only records sessions from the moment it's installed. To import everything you did before, run (from the plugin directory):
+
+```bash
+bun scripts/backfill.ts [--dry-run] [--limit N] [--concurrency N] [--exclude <regex>]
+```
+
+It scans `~/.claude/projects/**/*.jsonl`, skips sessions already tracked and empty transcripts, extracts metadata (project, branch, dates, tokens) straight from each transcript and asks Haiku for the title/summary/topics - the same analysis the live hook does. Progress is saved after every session, so it's safe to interrupt and re-run. Use `--exclude` to leave out transcripts whose path matches a regex (e.g. throwaway test-harness dirs); exclusions are counted and reported.
+
+Backfilled sessions have no account info (transcripts don't record it) and, unlike the live hook, the backfill never writes `SESSION_SUMMARIES.md` into your project directories.
 
 ### Multiple accounts / subscriptions
 
