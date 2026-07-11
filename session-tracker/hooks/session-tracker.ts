@@ -8,13 +8,23 @@
  * - On session end: consolidates all incremental summaries into a final one
  */
 
-import { mkdirSync, statSync, copyFileSync, unlinkSync } from "fs";
-import { homedir } from "os";
+import { mkdirSync, statSync, copyFileSync, unlinkSync, readdirSync } from "fs";
+import { homedir, hostname } from "os";
 import { join, basename } from "path";
 
 const BASE_DIR = process.env.SESSION_TRACKER_DIR
   ?? join(homedir(), ".claude", "session-tracker");
-const SESSIONS_JS_FILE = join(BASE_DIR, "sessions-data.js");
+
+/** Sanitized machine name: filename-safe, stable across runs. */
+export function sanitizeHost(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "") || "unknown";
+}
+export const HOST = sanitizeHost(process.env.SESSION_TRACKER_HOSTNAME ?? hostname());
+
+// One data file per machine: multi-machine setups sync the data dir and every
+// machine only ever writes its own file, so the sync never sees two writers.
+const SESSIONS_JS_FILE = join(BASE_DIR, "sessions-data.js"); // legacy / single-host merged
+const HOST_JS_FILE = join(BASE_DIR, `sessions-data.${HOST}.js`);
 const SUMMARIES_FILENAME = "SESSION_SUMMARIES.md";
 const WEB_UI_SOURCE = join(import.meta.dir, "..", "web", "index.html");
 const WEB_UI_TARGET = join(BASE_DIR, "index.html");
@@ -84,6 +94,7 @@ export interface Session {
   summaries: string[];
   tokens: TokenUsage;
   account: AccountInfo | null;
+  host: string;
 }
 
 interface HookInput {
@@ -124,37 +135,71 @@ interface TranscriptEntry {
 
 // -- Data I/O --
 
-export async function loadSessions(): Promise<Session[]> {
-  const file = Bun.file(SESSIONS_JS_FILE);
-  if (await file.exists()) {
-    try {
-      const text = await file.text();
-      const jsonStr = text.replace("window.SESSIONS_DATA = ", "").trimEnd().replace(/;$/, "");
-      const sessions: Session[] = JSON.parse(jsonStr);
-      for (const s of sessions) {
-        // Migrate old format: date -> started_at + updated_at
-        const legacy = s as Record<string, unknown>;
-        if (legacy.date && !s.started_at) {
-          s.started_at = legacy.date as string;
-          s.updated_at = legacy.date as string;
-          delete legacy.date;
-        }
-        if (!s.summaries) s.summaries = [];
-        if (!s.tokens) s.tokens = { input: 0, output: 0, cache_write: 0, cache_read: 0 };
-        if (s.account === undefined) s.account = null;
+export function parseSessionsJs(text: string): Session[] {
+  try {
+    const jsonStr = text.replace("window.SESSIONS_DATA = ", "").trimEnd().replace(/;$/, "");
+    const sessions: Session[] = JSON.parse(jsonStr);
+    for (const s of sessions) {
+      // Migrate old format: date -> started_at + updated_at
+      const legacy = s as Record<string, unknown>;
+      if (legacy.date && !s.started_at) {
+        s.started_at = legacy.date as string;
+        s.updated_at = legacy.date as string;
+        delete legacy.date;
       }
-      return sessions;
-    } catch {
-      return [];
+      if (!s.summaries) s.summaries = [];
+      if (!s.tokens) s.tokens = { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+      if (s.account === undefined) s.account = null;
+      if (!s.host) s.host = "";
     }
+    return sessions;
+  } catch {
+    return [];
   }
-  return [];
+}
+
+export async function loadSessionsFrom(path: string): Promise<Session[]> {
+  const file = Bun.file(path);
+  if (!(await file.exists())) return [];
+  return parseSessionsJs(await file.text());
+}
+
+/** Other machines' data files present in the (possibly synced) data dir. */
+export function otherHostFiles(): string[] {
+  try {
+    return readdirSync(BASE_DIR)
+      .filter(f => /^sessions-data\..+\.js$/.test(f) && f !== `sessions-data.${HOST}.js`)
+      .map(f => join(BASE_DIR, f));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Sessions tracked by THIS machine. First run migrates the legacy
+ * single-file data (pre multi-host) into this host's file.
+ */
+export async function loadSessions(): Promise<Session[]> {
+  const own = await loadSessionsFrom(HOST_JS_FILE);
+  if (own.length > 0) return own;
+  // Migration: adopt the legacy file's sessions as ours (stamping host)
+  const legacy = await loadSessionsFrom(SESSIONS_JS_FILE);
+  for (const s of legacy) if (!s.host) s.host = HOST;
+  return legacy;
 }
 
 export async function saveSessions(sessions: Session[]): Promise<void> {
   mkdirSync(BASE_DIR, { recursive: true });
+  for (const s of sessions) if (!s.host) s.host = HOST;
   const content = "window.SESSIONS_DATA = " + JSON.stringify(sessions, null, 2) + ";\n";
-  await Bun.write(SESSIONS_JS_FILE, content);
+  await Bun.write(HOST_JS_FILE, content);
+  // Single-machine setups keep the legacy file in sync so opening
+  // index.html via file:// still works. On multi-machine (other host files
+  // present) the legacy file is left alone - two writers over a synced file
+  // means conflicts; serve.ts is the merge point there.
+  if (otherHostFiles().length === 0) {
+    await Bun.write(SESSIONS_JS_FILE, content);
+  }
 }
 
 function findSession(sessions: Session[], sessionId: string): Session | undefined {
@@ -730,6 +775,7 @@ async function main(): Promise<void> {
     summaries: updatedSummaries,
     tokens,
     account: freshExisting?.account ?? account,
+    host: HOST,
   };
 
   if (freshExisting) {

@@ -377,11 +377,13 @@ const _raw = (window.SESSIONS_DATA || [])
     const acc = s.account || null;
     return {
     ...s,
+    _host: s.host || '',
+    _hostDotStyle: accountDotStyle('host:' + (s.host || '')),
     _accKey: (acc && acc.email) || '',
     _accEmail: (acc && acc.email) || 'untracked account',
     _accPlan: (acc && acc.plan) || '',
     _accDotStyle: accountDotStyle((acc && acc.email) || ''),
-    _search: [s.title, s.summary, s.topics, s.project, s.project_path,
+    _search: [s.title, s.summary, s.topics, s.project, s.project_path, s.host || '',
       (acc && acc.email) || '', (acc && acc.plan) || ''].join('\0').toLowerCase(),
     _topics: s.topics.split(',').map(t => t.trim()).filter(Boolean),
     _badgeClass: 'badge badge-' + s.status,
@@ -420,7 +422,40 @@ const _accounts = (() => {
 })();
 const MULTI_ACCOUNT = _accounts.length >= 2;
 
-blok.mount('#app', {
+// Distinct machines across all sessions (chips only show for 2+)
+const _hosts = (() => {
+  const map = new Map();
+  for (const s of _raw) {
+    const key = s._host;
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        name: key || 'unknown host',
+        dotStyle: s._hostDotStyle,
+        count: 0,
+      });
+    }
+    map.get(key).count++;
+  }
+  return Array.from(map.values()).sort((a, b) => b.count - a.count);
+})();
+const MULTI_HOST = _hosts.length >= 2;
+
+// blok has no lifecycle hook, so fetch the server config BEFORE mounting
+// and hand it over as initial state. Older/read-only servers may not allow
+// resume; default to copy-only.
+async function loadConfig() {
+  if (!SERVER_MODE) return {};
+  try {
+    const r = await fetch('/api/config');
+    return r.ok ? await r.json() : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+loadConfig().then(cfg => {
+const app = blok.mount('#app', {
   state: {
     sessions: _raw,
     searchInput: '',
@@ -431,19 +466,11 @@ blok.mount('#app', {
     hiddenSessionIds: stored.sessions,
     hiddenProjectPaths: stored.projects,
     accountFilter: '__all__',
-    canResume: false,
+    hostFilter: '__all__',
+    canResume: !!cfg.resume,
+    serverHost: cfg.host || '',
+    remotes: cfg.remotes || {},
     tick: 0,
-  },
-
-  init() {
-    setInterval(() => { this.tick++; }, 60000);
-    if (SERVER_MODE) {
-      // Older/read-only servers may not allow resume; default to copy-only.
-      fetch('/api/config')
-        .then(r => r.ok ? r.json() : {})
-        .then(c => { this.canResume = !!c.resume; })
-        .catch(() => {});
-    }
   },
 
   watch: {
@@ -460,6 +487,9 @@ blok.mount('#app', {
       if (this.accountFilter !== '__all__') {
         result = result.filter(s => s._accKey === this.accountFilter);
       }
+      if (this.hostFilter !== '__all__') {
+        result = result.filter(s => s._host === this.hostFilter);
+      }
       if (q) {
         result = result.filter(s => s._search.includes(q));
       }
@@ -472,26 +502,36 @@ blok.mount('#app', {
     },
     grouped() {
       void this.tick;
+      // Group by project NAME: with a synced dev folder the same repo lives
+      // at a different absolute path on every machine.
       const map = new Map();
       const hiddenIds = new Set(this.hiddenSessionIds);
-      const hiddenPaths = new Set(this.hiddenProjectPaths);
+      const hiddenKeys = new Set(this.hiddenProjectPaths);
       for (const s of this.filtered) {
-        const path = s.project_path;
-        if (!map.has(path)) map.set(path, []);
+        const key = s.project || s.project_path || 'unknown';
+        if (!map.has(key)) map.set(key, { sessions: [], paths: new Set() });
         s._isHidden = hiddenIds.has(s.id);
         s._startLabel = 'start: ' + relativeTime(s.started_at);
         s._endLabel = s._endPrefix ? s._endPrefix + ': ' + relativeTime(s.updated_at) : '';
-        map.get(path).push(s);
+        const g = map.get(key);
+        g.sessions.push(s);
+        if (s.project_path) g.paths.add(s.project_path);
       }
-      return Array.from(map, ([path, sessions]) => ({
-        projectPath: path,
-        sessions,
-        hidden: hiddenPaths.has(path),
+      return Array.from(map, ([key, g]) => ({
+        projectPath: key,
+        pathsTitle: Array.from(g.paths).join('\n') || key,
+        sessions: g.sessions,
+        // Back-compat: previously hidden entries stored the absolute path
+        hidden: hiddenKeys.has(key) || Array.from(g.paths).some(p => hiddenKeys.has(p)),
       }));
     },
     accounts() {
       if (!MULTI_ACCOUNT) return [];
       return _accounts.map(a => ({ ...a, active: a.key === this.accountFilter }));
+    },
+    hosts() {
+      if (!MULTI_HOST) return [];
+      return _hosts.map(h => ({ ...h, active: h.key === this.hostFilter }));
     },
     resumeHint() {
       return this.canResume ? 'Resume this session in a new terminal' : '';
@@ -526,6 +566,27 @@ blok.mount('#app', {
     setAccount(key) {
       this.accountFilter = this.accountFilter === key ? '__all__' : key;
     },
+    setHost(key) {
+      this.hostFilter = this.hostFilter === key ? '__all__' : key;
+    },
+    _isRemote(s) {
+      return !!(s._host && this.serverHost && s._host !== this.serverHost);
+    },
+    _copyRemote(s) {
+      const remote = this.remotes[s._host] || {};
+      const cmd = remote.command
+        ? remote.command
+            .replaceAll('{id}', s.id)
+            .replaceAll('{path}', s.project_path || '')
+            .replaceAll('{project}', s.project || '')
+        : 'claude --resume ' + s.id;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cmd).catch(() => this._fallbackCopy(cmd));
+      } else {
+        this._fallbackCopy(cmd);
+      }
+      this._toast('Session from "' + (remote.label || s._host) + '" - command copied', 2500);
+    },
     _toast(msg, ms) {
       this.toastMsg = msg;
       this.showToast = true;
@@ -534,6 +595,11 @@ blok.mount('#app', {
     },
     async resumeSession(s) {
       if (!this.canResume) return;
+      if (this._isRemote(s)) {
+        // Can't open a terminal on another machine - hand over the command
+        this._copyRemote(s);
+        return;
+      }
       this._toast('Opening terminal…', 2500);
       try {
         const res = await fetch('/api/resume', {
@@ -570,6 +636,12 @@ blok.mount('#app', {
       saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
     },
     copyResume(session) {
+      // For sessions from another machine with a configured remote command,
+      // copy that instead of a local cd that wouldn't exist here.
+      if (this._isRemote(session) && this.remotes[session._host]) {
+        this._copyRemote(session);
+        return;
+      }
       const cmd = 'cd ' + session.project_path + ' && claude --resume ' + session.id;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(cmd).catch(() => this._fallbackCopy(cmd));
@@ -612,23 +684,39 @@ blok.mount('#app', {
             }},
           ]),
         ]}},
-        ...(MULTI_ACCOUNT ? [
+        ...(MULTI_ACCOUNT || MULTI_HOST ? [
           { div: { class: 'header-row', children: [
-            { each: $.accounts, as: 'acc', key: 'key', children: [
-              { button: {
-                class: ['account-chip', { active: $.acc.active }],
-                click: 'setAccount(acc.key)',
-                bind: { title: 'Filter sessions by this account' },
-                children: [
-                  { span: { class: 'account-dot', bind: { style: $.acc.dotStyle } } },
-                  { span: { text: $.acc.email } },
-                  { when: $.acc.plan, children: [
-                    { span: { class: 'account-plan', text: $.acc.plan } },
-                  ]},
-                  { span: { class: 'group-count', text: $.acc.count } },
-                ],
-              }},
-            ]},
+            ...(MULTI_HOST ? [
+              { each: $.hosts, as: 'h', key: 'key', children: [
+                { button: {
+                  class: ['account-chip', { active: $.h.active }],
+                  click: 'setHost(h.key)',
+                  bind: { title: 'Filter sessions by machine' },
+                  children: [
+                    { span: { class: 'account-dot', bind: { style: $.h.dotStyle } } },
+                    { span: { text: $.h.name } },
+                    { span: { class: 'group-count', text: $.h.count } },
+                  ],
+                }},
+              ]},
+            ] : []),
+            ...(MULTI_ACCOUNT ? [
+              { each: $.accounts, as: 'acc', key: 'key', children: [
+                { button: {
+                  class: ['account-chip', { active: $.acc.active }],
+                  click: 'setAccount(acc.key)',
+                  bind: { title: 'Filter sessions by this account' },
+                  children: [
+                    { span: { class: 'account-dot', bind: { style: $.acc.dotStyle } } },
+                    { span: { text: $.acc.email } },
+                    { when: $.acc.plan, children: [
+                      { span: { class: 'account-plan', text: $.acc.plan } },
+                    ]},
+                    { span: { class: 'group-count', text: $.acc.count } },
+                  ],
+                }},
+              ]},
+            ] : []),
           ]}},
         ] : []),
         { input: {
@@ -643,7 +731,7 @@ blok.mount('#app', {
         { each: $.grouped, as: 'group', key: 'projectPath', children: [
           { div: { class: { group: true, 'group-hidden': $.group.hidden }, children: [
             { div: { class: 'group-header', children: [
-              { span: { class: 'group-path', bind: { title: $.group.projectPath }, text: $.group.projectPath } },
+              { span: { class: 'group-path', bind: { title: $.group.pathsTitle }, text: $.group.projectPath } },
               { span: { class: 'group-count', text: $.group.sessions.length } },
               { when: $.group.hidden, children: [
                 { button: {
@@ -678,6 +766,12 @@ blok.mount('#app', {
                       ]},
                     ]}},
                     { div: { class: 'card-meta', children: [
+                      ...(MULTI_HOST ? [
+                        { span: { class: 'card-account', bind: { title: 'Machine this session ran on' }, children: [
+                          { span: { class: 'account-dot', bind: { style: $.s._hostDotStyle } } },
+                          { span: { text: $.s._host } },
+                        ]}},
+                      ] : []),
                       ...(MULTI_ACCOUNT ? [
                         { span: { class: 'card-account', bind: { title: $.s._accEmail }, children: [
                           { span: { class: 'account-dot', bind: { style: $.s._accDotStyle } } },
@@ -752,6 +846,14 @@ blok.mount('#app', {
       { div: { class: ['copied-toast', { show: $.showToast }], text: $.toastMsg } },
     ]},
   }),
+});
+
+// Refresh relative times every minute (no-op if mount doesn't return state)
+try {
+  if (app && typeof app.tick === 'number') {
+    setInterval(() => { app.tick++; }, 60000);
+  }
+} catch (e) { /* ignore */ }
 });
 </script>
 </body>

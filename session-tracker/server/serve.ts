@@ -14,13 +14,20 @@
  * Port:   4457 by default, override with SESSION_TRACKER_PORT.
  */
 
-import { homedir } from "os";
+import { homedir, hostname } from "os";
 import { join } from "path";
-import { statSync } from "fs";
+import { statSync, readdirSync } from "fs";
 
 const BASE_DIR = process.env.SESSION_TRACKER_DIR
   ?? join(homedir(), ".claude", "session-tracker");
 const SESSIONS_JS_FILE = join(BASE_DIR, "sessions-data.js");
+const REMOTES_FILE = join(BASE_DIR, "remote-hosts.json");
+
+// Must match the hook's sanitization (serve.ts is provisioned standalone)
+function sanitizeHost(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "") || "unknown";
+}
+const MACHINE = sanitizeHost(process.env.SESSION_TRACKER_HOSTNAME ?? hostname());
 const PORT = Number(process.env.SESSION_TRACKER_PORT ?? 4457);
 // Read-only mode: browse/filter only, no resume endpoint. For serving the
 // UI from a machine that doesn't hold the sessions (e.g. a NAS container).
@@ -32,15 +39,47 @@ const HOST = process.env.SESSION_TRACKER_HOST ?? "127.0.0.1";
 interface StoredSession {
   id: string;
   project_path?: string;
+  host?: string;
 }
 
-async function loadSessions(): Promise<StoredSession[]> {
+async function parseDataFile(path: string): Promise<StoredSession[]> {
   try {
-    const text = await Bun.file(SESSIONS_JS_FILE).text();
+    const text = await Bun.file(path).text();
     const jsonStr = text.replace("window.SESSIONS_DATA = ", "").trimEnd().replace(/;$/, "");
     return JSON.parse(jsonStr);
   } catch {
     return [];
+  }
+}
+
+/**
+ * Merge every data file in the dir: the legacy single-host file plus one
+ * sessions-data.<host>.js per machine (multi-machine setups sync the dir;
+ * each machine only writes its own file). Host files win on duplicate ids.
+ */
+async function loadSessions(): Promise<StoredSession[]> {
+  let names: string[] = [];
+  try { names = readdirSync(BASE_DIR); } catch { /* no data dir yet */ }
+  const hostFiles = names.filter(f => /^sessions-data\..+\.js$/.test(f)).sort();
+  const byId = new Map<string, StoredSession>();
+  for (const s of await parseDataFile(SESSIONS_JS_FILE)) byId.set(s.id, s);
+  for (const f of hostFiles) {
+    for (const s of await parseDataFile(join(BASE_DIR, f))) byId.set(s.id, s);
+  }
+  return Array.from(byId.values());
+}
+
+interface RemoteHost {
+  command?: string;
+  label?: string;
+}
+
+async function loadRemotes(): Promise<Record<string, RemoteHost>> {
+  try {
+    const remotes = await Bun.file(REMOTES_FILE).json();
+    return remotes && typeof remotes === "object" ? remotes : {};
+  } catch {
+    return {};
   }
 }
 
@@ -162,6 +201,11 @@ async function handleResume(req: Request): Promise<Response> {
     return json({ error: "unknown session id" }, 404);
   }
 
+  // Sessions live on the machine that ran them - we can only resume our own
+  if (session.host && session.host !== MACHINE) {
+    return json({ error: `session belongs to host "${session.host}" - resume it there` }, 400);
+  }
+
   const dir = session.project_path && isDirectory(session.project_path)
     ? session.project_path
     : homedir();
@@ -185,11 +229,16 @@ function firstExisting(...paths: string[]): string {
   return paths[0];
 }
 
-function serveStatic(pathname: string): Response {
+async function serveStatic(pathname: string): Promise<Response> {
+  if (pathname === "/sessions-data.js") {
+    // Merged view across all machines' data files
+    const merged = await loadSessions();
+    const body = "window.SESSIONS_DATA = " + JSON.stringify(merged, null, 2) + ";\n";
+    return new Response(body, { headers: { "Content-Type": "text/javascript; charset=utf-8" } });
+  }
   const files: Record<string, [string, string]> = {
     "/": [firstExisting(join(BASE_DIR, "index.html"), REPO_UI), "text/html; charset=utf-8"],
     "/index.html": [firstExisting(join(BASE_DIR, "index.html"), REPO_UI), "text/html; charset=utf-8"],
-    "/sessions-data.js": [SESSIONS_JS_FILE, "text/javascript; charset=utf-8"],
   };
   const entry = files[pathname];
   if (!entry) return new Response("Not found", { status: 404 });
@@ -204,7 +253,9 @@ Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
     if (url.pathname === "/api/config" && req.method === "GET") {
-      return json({ resume: !READONLY });
+      // host lets the UI tell local sessions (clickable resume) from remote
+      // ones (copy a remote command from remote-hosts.json, if configured)
+      return json({ resume: !READONLY, host: MACHINE, remotes: await loadRemotes() });
     }
     if (url.pathname === "/api/resume" && req.method === "POST") {
       return handleResume(req);

@@ -31,6 +31,7 @@ import {
   computeTokenUsage,
   buildConversationText,
   analyzeConversation,
+  HOST,
   type Session,
 } from "../hooks/session-tracker.ts";
 
@@ -139,6 +140,7 @@ async function backfillOne(path: string): Promise<Session | null> {
     summaries: [],
     tokens,
     account: null,
+    host: HOST,
   };
 }
 
