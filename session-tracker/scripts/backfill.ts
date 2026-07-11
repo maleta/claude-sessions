@@ -14,6 +14,11 @@
  * Usage:
  *   bun scripts/backfill.ts [--dry-run] [--limit N] [--concurrency N]
  *                           [--exclude <regex>] [--account <email[:plan]>]
+ *                           [--update-tokens]
+ *
+ * --update-tokens recomputes tokens AND the per-model breakdown for sessions
+ * ALREADY tracked on this machine (added later; older imports lack `models`).
+ * Reads transcripts only - no Haiku calls, titles/summaries untouched.
  *
  * --exclude matches against the transcript path (e.g. --exclude "ab-runs"
  * to leave out test-harness working dirs). Excluded counts are reported.
@@ -67,6 +72,7 @@ const CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
 const PROJECTS_DIR = join(CONFIG_DIR, "projects");
 
 const DRY_RUN = process.argv.includes("--dry-run");
+const UPDATE_TOKENS = process.argv.includes("--update-tokens");
 const LIMIT = intFlag("--limit", Infinity);
 const CONCURRENCY = intFlag("--concurrency", 3);
 const EXCLUDE = strFlag("--exclude");
@@ -155,7 +161,7 @@ async function backfillOne(path: string): Promise<Session | null> {
   const conversationText = await buildConversationText(path);
   if (!conversationText.trim()) return null;
 
-  const [meta, tokens, summary] = await Promise.all([
+  const [meta, usage, summary] = await Promise.all([
     transcriptMeta(path),
     computeTokenUsage(path),
     analyzeConversation(conversationText),
@@ -177,13 +183,41 @@ async function backfillOne(path: string): Promise<Session | null> {
     last_analyzed_at: msgCount,
     analysis_count: 1,
     summaries: [],
-    tokens,
+    tokens: usage.totals,
+    models: usage.models,
     account: ACCOUNT,
     host: HOST,
   };
 }
 
+/** --update-tokens: re-stamp tokens + per-model breakdown on tracked sessions. */
+async function updateTokens(): Promise<void> {
+  const transcriptById = new Map(listTranscripts().map(p => [basename(p, ".jsonl"), p]));
+  const sessions = await loadSessions();
+  let updated = 0, missing = 0;
+  for (const s of sessions) {
+    const path = transcriptById.get(s.id);
+    if (!path) { missing++; continue; }
+    if (!DRY_RUN) {
+      const usage = await computeTokenUsage(path);
+      s.tokens = usage.totals;
+      s.models = usage.models;
+    }
+    updated++;
+  }
+  if (DRY_RUN) {
+    console.log(`Would update ${updated} sessions (${missing} without a local transcript).`);
+    return;
+  }
+  await saveSessions(sessions);
+  console.log(`Updated tokens + models on ${updated} sessions (${missing} without a local transcript).`);
+}
+
 async function main(): Promise<void> {
+  if (UPDATE_TOKENS) {
+    await updateTokens();
+    return;
+  }
   const sessions = await loadSessions();
   const known = new Set(sessions.map(s => s.id));
   const tombstones = loadTombstones();

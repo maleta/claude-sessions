@@ -6,308 +6,400 @@
 <title>Claude Sessions</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0e13;
+    --surface: #10151c;
+    --surface2: #171e27;
+    --border: #232b36;
+    --border-soft: #1a212b;
+    --border-hover: #33404f;
+    --text: #dce5ef;
+    --muted: #94a1b1;
+    --faint: #5d6979;
+    --accent: #e0795a;
+    --accent-bright: #eb8b6d;
+    --accent-soft: rgba(224, 121, 90, 0.14);
+    --link: #5b9dd9;
+    --ok: #46b26b;
+    --warn: #d19a2f;
+    --err: #e5544b;
+    --info: #5b9dd9;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+  }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: #0d1117;
-    color: #c9d1d9;
-    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
     line-height: 1.5;
   }
-  .header {
-    padding: 0 24px 24px;
+  button { font-family: inherit; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 1px;
   }
-  .header h1 {
-    font-size: 1.5rem;
-    color: #e6edf3;
-    margin-bottom: 16px;
-  }
-  .header-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-  }
-  .header .stats {
-    font-size: 0.85rem;
-    color: #8b949e;
-  }
-  .toggle-hidden {
-    background: none;
-    border: 1px solid #30363d;
-    color: #8b949e;
-    font-size: 0.8rem;
-    padding: 4px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.2s;
-  }
-  .toggle-hidden:hover { border-color: #58a6ff; color: #58a6ff; }
-  .toggle-hidden.active { border-color: #58a6ff; color: #58a6ff; background: #1a2a3a; }
-  .account-chip {
-    background: none;
-    border: 1px solid #30363d;
-    color: #8b949e;
-    font-size: 0.8rem;
-    padding: 4px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.2s;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-  }
-  .account-chip:hover { border-color: #58a6ff; color: #58a6ff; }
-  .account-chip.active { border-color: #58a6ff; color: #e6edf3; background: #1a2a3a; }
-  .account-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    display: inline-block;
-    flex-shrink: 0;
-  }
-  .account-plan {
-    font-size: 0.7rem;
-    color: #8b949e;
-    background: #21262d;
-    padding: 1px 6px;
-    border-radius: 8px;
-  }
-  .card-account {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-  }
-  .serve-hint {
-    font-size: 0.75rem;
-    color: #484f58;
-    font-family: monospace;
-  }
-  .card.card-clickable { cursor: pointer; }
-  .search-box {
-    width: 100%;
-    padding: 10px 14px;
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-    color: #c9d1d9;
-    font-size: 0.95rem;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-  .search-box:focus { border-color: #58a6ff; }
-  .search-box::placeholder { color: #484f58; }
-  .groups {
-    display: flex;
-    gap: 20px;
-    overflow-x: auto;
-    padding: 0 24px 16px;
-  }
-  .group {
-    flex: 0 0 500px;
-    min-width: 500px;
-  }
-  .group-header {
+
+  /* ---------- top bar ---------- */
+  .topbar {
     position: sticky;
     top: 0;
-    background: #0d1117;
+    z-index: 10;
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #21262d;
+    gap: 14px;
+    padding: 12px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border-soft);
+    flex-wrap: wrap;
   }
-  .group-path {
+  .brand {
+    font-size: 1.05rem;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+  .brand .bhost { color: var(--faint); font-weight: 400; font-size: 0.85rem; }
+  .search-box {
+    flex: 1;
+    min-width: 220px;
+    padding: 9px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.92rem;
+    font-family: var(--mono);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-box:focus { border-color: var(--link); outline: none; }
+  .search-box::placeholder { color: var(--faint); font-family: var(--mono); font-size: 0.85rem; }
+  .kpis { display: flex; gap: 8px; }
+  .kpi {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    background: var(--surface2);
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 4px 13px;
+    white-space: nowrap;
+  }
+  .kpi b {
+    font-size: 0.95rem;
+    font-weight: 650;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .kpi small {
+    font-size: 0.66rem;
+    color: var(--faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .iconbtn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 8px 14px;
     font-size: 0.85rem;
-    font-family: monospace;
-    color: #58a6ff;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .iconbtn:hover { border-color: var(--accent); color: var(--text); }
+
+  /* ---------- layout: sidebar + feed ---------- */
+  .appbody {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .sidebar {
+    padding: 18px 16px 32px;
+    border-right: 1px solid var(--border-soft);
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    position: sticky;
+    top: 61px;
+    align-self: start;
+    max-height: calc(100vh - 61px);
+    overflow-y: auto;
+  }
+  .facet h4 {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--faint);
+    margin-bottom: 8px;
+  }
+  .facet-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    padding: 5px 9px;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    font-size: 0.86rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+  }
+  .facet-row:hover { background: var(--surface2); color: var(--text); }
+  .facet-row.on { background: var(--accent-soft); color: var(--text); }
+  .facet-row .fname {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
   }
-  .group-count {
+  .facet-row .fname.mono { font-family: var(--mono); font-size: 0.8rem; }
+  .facet-row .cnt {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  .facet-row .fhide {
+    background: none; border: none; cursor: pointer;
+    color: transparent;
     font-size: 0.75rem;
-    color: #8b949e;
-    background: #21262d;
-    padding: 1px 8px;
+    padding: 0 2px;
+    flex-shrink: 0;
+  }
+  .facet-row:hover .fhide { color: var(--faint); }
+  .facet-row .fhide:hover { color: var(--err); }
+  .facet-more {
+    background: none; border: none; cursor: pointer;
+    color: var(--faint);
+    font-size: 0.78rem;
+    padding: 4px 9px;
+    text-align: left;
+  }
+  .facet-more:hover { color: var(--link); }
+  .swatch { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .st-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .serve-hint {
+    font-size: 0.75rem;
+    color: var(--faint);
+    font-family: var(--mono);
+    line-height: 1.6;
+  }
+
+  /* ---------- feed ---------- */
+  .feed {
+    padding: 16px 22px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+  .feed-tools {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+    color: var(--faint);
+  }
+  .feed-tools .spacer { flex: 1; }
+  .feed-tools .flabel { text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.06em; }
+  .tool-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.78rem;
+    padding: 4px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .tool-chip:hover { border-color: var(--link); color: var(--link); }
+  .tool-chip.active { border-color: var(--accent); color: var(--text); background: var(--accent-soft); }
+  .filters-btn { display: none; }
+
+  .cards { display: flex; flex-direction: column; gap: 12px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
     border-radius: 10px;
+    padding: 15px 18px 12px;
+    transition: border-color 0.15s;
+    cursor: pointer;
+  }
+  .card:hover { border-color: var(--border-hover); }
+  .card.pinned { border-color: rgba(209, 154, 47, 0.45); }
+  .card.card-hidden { opacity: 0.45; border-style: dashed; }
+  .card.card-deleted { opacity: 0.45; border-style: dashed; border-color: var(--err); }
+
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 5px;
+  }
+  .card-title {
+    font-size: 1.05rem;
+    font-weight: 640;
+    color: var(--text);
+  }
+  .card:hover .card-title { color: var(--link); }
+  .card-pin { color: var(--warn); font-size: 0.95rem; flex-shrink: 0; }
+  .cost {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.95rem;
+    font-weight: 650;
+    color: var(--text);
     white-space: nowrap;
     flex-shrink: 0;
   }
-  .hide-btn {
-    background: none;
-    border: none;
-    color: #484f58;
-    font-size: 0.8rem;
-    cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 4px;
-    transition: color 0.2s;
-    flex-shrink: 0;
-  }
-  .hide-btn:hover { color: #f85149; }
-  .restore-btn {
-    background: none;
-    border: none;
-    color: #3fb950;
-    font-size: 0.8rem;
-    cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 4px;
-    transition: color 0.2s;
-    flex-shrink: 0;
-  }
-  .restore-btn:hover { color: #56d364; }
-  .cards {
+  .cost small { color: var(--faint); font-weight: 400; font-size: 0.72rem; }
+
+  .meta {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .card {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    padding: 16px 20px;
-    transition: border-color 0.2s;
-  }
-  .card:hover { border-color: #58a6ff; }
-  .card.card-hidden {
-    opacity: 0.4;
-    border-style: dashed;
-  }
-  .card.card-deleted {
-    opacity: 0.45;
-    border-style: dashed;
-    border-color: #f85149;
-  }
-  .card-top {
-    display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 6px;
-    flex-wrap: wrap;
     gap: 8px;
-  }
-  .card-dates {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .card-date {
+    flex-wrap: wrap;
     font-size: 0.8rem;
-    color: #8b949e;
+    color: var(--muted);
+    margin-bottom: 9px;
   }
-  .card-meta {
-    font-size: 0.8rem;
-    color: #8b949e;
-    display: flex;
-    gap: 12px;
+  .meta .sep { color: #2c3541; }
+  .meta .mono { font-family: var(--mono); font-size: 0.76rem; }
+  .chip {
+    display: inline-flex;
     align-items: center;
+    gap: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border-soft);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    color: var(--muted);
   }
-  .card-title {
-    font-size: 1.1rem;
-    color: #e6edf3;
-    font-weight: 600;
-    margin-bottom: 8px;
-    cursor: pointer;
+  .chip.model { font-family: var(--mono); color: var(--text); }
+  .chip.proj { font-family: var(--mono); color: var(--link); cursor: pointer; }
+  .chip.proj:hover { border-color: var(--link); }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 0.75rem;
+    font-weight: 550;
+    white-space: nowrap;
   }
-  .card-title:hover { color: #58a6ff; text-decoration: underline; }
-  .card-pin { color: #d29922; margin-right: 4px; }
+  .pill-completed   { background: rgba(70,178,107,0.12); color: var(--ok); }
+  .pill-in-progress { background: rgba(209,154,47,0.12); color: var(--warn); }
+  .pill-exploring   { background: rgba(91,157,217,0.12); color: var(--info); }
+  .pill-debugging   { background: rgba(229,84,75,0.12);  color: var(--err); }
+
   .card-summary {
     font-size: 0.9rem;
-    color: #8b949e;
-    margin-bottom: 10px;
+    color: var(--muted);
+    max-width: 90ch;
+    margin-bottom: 9px;
   }
   .card-note {
     font-size: 0.85rem;
-    color: #d29922;
+    color: var(--warn);
     font-style: italic;
-    margin-bottom: 10px;
+    border-left: 2px solid rgba(209, 154, 47, 0.4);
+    padding-left: 10px;
+    margin-bottom: 9px;
     white-space: pre-wrap;
   }
-  .card-tokens {
-    font-size: 0.75rem;
-    font-family: monospace;
-    color: #8b949e;
-    margin-bottom: 10px;
+
+  .card-foot {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px 10px;
-  }
-  .card-tokens .tok-label { color: #484f58; }
-  .card-tokens .tok-val { color: #58a6ff; }
-  .card-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .topics {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .topic {
-    background: #1f2a37;
-    color: #58a6ff;
-    font-size: 0.75rem;
-    padding: 2px 8px;
-    border-radius: 12px;
-    white-space: nowrap;
-  }
-  .badge {
-    display: inline-block;
-    font-size: 0.75rem;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-  .badge-completed { background: #1a3a2a; color: #3fb950; }
-  .badge-in-progress { background: #3a2a1a; color: #d29922; }
-  .badge-exploring { background: #1a2a3a; color: #58a6ff; }
-  .badge-debugging { background: #3a1a2a; color: #f85149; }
-  .card-actions {
-    display: flex;
-    gap: 6px;
     align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--border-soft);
+    padding-top: 10px;
+    margin-top: 2px;
   }
-  .resume-btn {
+  .topics { display: flex; gap: 6px; flex-wrap: wrap; }
+  .topic {
+    font-size: 0.73rem;
+    color: var(--link);
+    background: rgba(91, 157, 217, 0.09);
+    border-radius: 12px;
+    padding: 1px 9px;
+    white-space: nowrap;
+  }
+  .dates {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .dates .dval { color: var(--muted); }
+  .dates .rel { color: var(--accent); }
+  .actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; }
+  .abtn {
     background: none;
-    border: 1px solid #30363d;
-    color: #8b949e;
-    font-size: 0.75rem;
-    padding: 3px 10px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.78rem;
     border-radius: 6px;
+    padding: 4px 12px;
     cursor: pointer;
-    font-family: monospace;
-    transition: all 0.2s;
+    transition: all 0.15s;
+    white-space: nowrap;
   }
-  .resume-btn:hover {
-    border-color: #58a6ff;
-    color: #58a6ff;
+  .abtn:hover { border-color: var(--link); color: var(--link); }
+  .abtn.danger:hover { border-color: var(--err); color: var(--err); }
+  .abtn.good { color: var(--ok); }
+  .abtn.good:hover { border-color: var(--ok); color: var(--ok); }
+  .abtn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #14100e;
+    font-weight: 650;
   }
+  .abtn.primary:hover { background: var(--accent-bright); border-color: var(--accent-bright); color: #14100e; }
+
+  /* compact density: one glance per session */
+  .cards.compact { gap: 8px; }
+  .cards.compact .card { padding: 10px 16px 8px; }
+  .cards.compact .card-summary,
+  .cards.compact .card-note,
+  .cards.compact .topics { display: none; }
+  .cards.compact .card-head { margin-bottom: 3px; }
+  .cards.compact .meta { margin-bottom: 6px; }
+  .cards.compact .card-foot { border-top: none; padding-top: 0; }
+
   .no-results {
     text-align: center;
-    color: #484f58;
-    padding: 48px 0;
+    color: var(--faint);
+    padding: 60px 0;
     font-size: 1rem;
-    flex: 0 0 500px;
   }
   .copied-toast {
     position: fixed;
     bottom: 24px;
     right: 24px;
-    background: #1f6feb;
-    color: #fff;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 0.85rem;
+    background: var(--accent);
+    color: #14100e;
+    font-weight: 600;
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-size: 0.88rem;
     opacity: 0;
     transition: opacity 0.3s;
     pointer-events: none;
@@ -315,11 +407,11 @@
   }
   .copied-toast.show { opacity: 1; }
 
-  /* -- Detail modal -- */
+  /* ---------- detail modal ---------- */
   .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(1, 4, 9, 0.75);
+    background: rgba(3, 6, 10, 0.78);
     display: flex;
     align-items: flex-start;
     justify-content: center;
@@ -328,197 +420,268 @@
     overflow-y: auto;
   }
   .modal {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 10px;
-    width: 720px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 760px;
     max-width: 100%;
-    padding: 24px;
+    padding: 26px;
   }
-  .modal h2 {
-    font-size: 1.1rem;
-    color: #e6edf3;
-    margin-bottom: 14px;
-  }
+  .modal h2 { font-size: 1.15rem; margin-bottom: 16px; }
   .edit-label {
     display: block;
-    font-size: 0.75rem;
-    color: #8b949e;
-    margin: 12px 0 4px;
+    font-size: 0.7rem;
+    color: var(--faint);
+    margin: 14px 0 5px;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.08em;
+    font-weight: 600;
   }
   .edit-input, .edit-area {
     width: 100%;
-    padding: 8px 10px;
-    background: #0d1117;
-    border: 1px solid #30363d;
+    padding: 9px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
     border-radius: 6px;
-    color: #c9d1d9;
-    font-size: 0.9rem;
+    color: var(--text);
+    font-size: 0.92rem;
     outline: none;
     font-family: inherit;
   }
-  .edit-input:focus, .edit-area:focus { border-color: #58a6ff; }
-  .edit-area { min-height: 72px; resize: vertical; }
-  .edit-orig {
-    font-size: 0.75rem;
-    color: #484f58;
-    margin-top: 3px;
-  }
+  .edit-input:focus, .edit-area:focus { border-color: var(--link); }
+  .edit-area { min-height: 76px; resize: vertical; }
+  .edit-orig { font-size: 0.78rem; color: var(--faint); margin-top: 4px; }
   .modal-info {
-    font-size: 0.8rem;
-    color: #8b949e;
-    font-family: monospace;
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-family: var(--mono);
     margin: 12px 0;
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 2px 14px;
+    gap: 4px 16px;
     word-break: break-all;
+    font-variant-numeric: tabular-nums;
   }
-  .modal-info .k { color: #484f58; }
+  .modal-info .k { color: var(--faint); }
+  .modal-info .rel { color: var(--accent); }
+  .cost-rows {
+    margin: 4px 0 0;
+    list-style: none;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--muted);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .cost-rows li { margin: 3px 0; }
+  .cost-rows .cv { color: var(--text); }
+  .cost-note { font-size: 0.78rem; color: var(--warn); margin-top: 4px; }
   .modal-summaries {
     margin-top: 6px;
-    font-size: 0.82rem;
-    color: #8b949e;
-    border-left: 2px solid #21262d;
-    padding-left: 10px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
   }
-  .modal-summaries li { margin: 4px 0 4px 14px; }
+  .modal-summaries li { margin: 5px 0 5px 14px; }
   .modal-actions {
     display: flex;
     gap: 8px;
-    margin-top: 18px;
+    margin-top: 20px;
     flex-wrap: wrap;
     align-items: center;
   }
   .btn {
     background: none;
-    border: 1px solid #30363d;
-    color: #c9d1d9;
-    font-size: 0.82rem;
-    padding: 6px 14px;
-    border-radius: 6px;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.85rem;
+    padding: 7px 15px;
+    border-radius: 7px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s;
   }
-  .btn:hover { border-color: #58a6ff; color: #58a6ff; }
-  .btn.primary { border-color: #1f6feb; background: #1f6feb; color: #fff; }
-  .btn.primary:hover { background: #388bfd; }
-  .btn.danger:hover { border-color: #f85149; color: #f85149; }
-  .btn.warn { color: #d29922; }
-  .btn.active { border-color: #58a6ff; background: #1a2a3a; color: #e6edf3; }
+  .btn:hover { border-color: var(--link); color: var(--link); }
+  .btn.primary { border-color: var(--accent); background: var(--accent); color: #14100e; font-weight: 650; }
+  .btn.primary:hover { background: var(--accent-bright); border-color: var(--accent-bright); color: #14100e; }
+  .btn.danger:hover { border-color: var(--err); color: var(--err); }
+  .btn.warn { color: var(--warn); }
+  .btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
   .spacer { flex: 1; }
 
-  /* -- Stats dashboard -- */
+  /* ---------- stats dashboard ---------- */
   .stats-overlay {
     position: fixed;
     inset: 0;
-    background: #0d1117;
+    background: var(--bg);
     z-index: 25;
     overflow-y: auto;
-    padding: 24px;
+    padding: 28px 24px;
     display: none;
   }
   .stats-overlay.open { display: block; }
-  .stats-inner { max-width: 1080px; margin: 0 auto; }
+  .stats-inner { max-width: 1100px; margin: 0 auto; }
   .stats-head {
     display: flex;
     align-items: center;
     gap: 16px;
-    margin-bottom: 18px;
+    margin-bottom: 20px;
   }
-  .stats-head h2 { font-size: 1.3rem; color: #e6edf3; flex: 1; }
+  .stats-head h2 { font-size: 1.35rem; flex: 1; }
   .stats-filters {
     display: flex;
     gap: 8px;
     align-items: center;
     flex-wrap: wrap;
-    margin-bottom: 20px;
+    margin-bottom: 22px;
   }
-  .stats-filters .flabel { font-size: 0.75rem; color: #484f58; text-transform: uppercase; letter-spacing: 0.04em; margin-left: 10px; }
-  .kpis {
+  .stats-filters .flabel {
+    font-size: 0.7rem;
+    color: var(--faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-left: 10px;
+  }
+  .kpigrid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 12px;
     margin-bottom: 24px;
   }
-  .kpi {
-    background: #161b22;
-    border: 1px solid #21262d;
-    border-radius: 8px;
-    padding: 14px 18px;
+  .kpicard {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    padding: 16px 20px;
   }
-  .kpi .klabel { font-size: 0.75rem; color: #8b949e; margin-bottom: 4px; }
-  .kpi .kvalue { font-size: 1.7rem; font-weight: 600; color: #e6edf3; }
-  .kpi .ksub { font-size: 0.72rem; color: #484f58; margin-top: 2px; }
+  .kpicard .klabel { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+  .kpicard .kvalue {
+    font-size: 1.8rem;
+    font-weight: 650;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .kpicard .ksub { font-size: 0.75rem; color: var(--faint); margin-top: 3px; }
   .chart-card {
-    background: #161b22;
-    border: 1px solid #21262d;
-    border-radius: 8px;
-    padding: 16px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    padding: 18px 20px;
     margin-bottom: 20px;
   }
-  .chart-card h3 { font-size: 0.9rem; color: #c9d1d9; margin-bottom: 4px; font-weight: 600; }
-  .chart-card .csub { font-size: 0.72rem; color: #484f58; margin-bottom: 12px; }
-  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
-  .legend .lkey { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #8b949e; }
-  .legend .lswatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .chart-card h3 { font-size: 0.98rem; margin-bottom: 4px; font-weight: 640; }
+  .chart-card .csub { font-size: 0.78rem; color: var(--faint); margin-bottom: 14px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+  .legend .lkey { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); }
+  .legend .lswatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
   .heatmap { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 4px; }
   .hm-col { display: flex; flex-direction: column; gap: 3px; }
-  .hm-cell {
-    width: 13px; height: 13px; border-radius: 3px;
-    background: #21262d;
-  }
-  .hm-scale { display: flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 0.7rem; color: #484f58; }
-  .hm-scale .hm-cell { width: 11px; height: 11px; }
-  .cols-chart { position: relative; height: 190px; margin-left: 46px; }
+  .hm-cell { width: 14px; height: 14px; border-radius: 3px; background: var(--surface2); }
+  .hm-scale { display: flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 0.75rem; color: var(--faint); }
+  .hm-scale .hm-cell { width: 12px; height: 12px; }
+  .cols-chart { position: relative; height: 200px; margin-left: 50px; }
   .cols-grid { position: absolute; inset: 0; }
-  .cols-grid .gline { position: absolute; left: 0; right: 0; border-top: 1px solid #21262d; }
-  .cols-grid .gtick { position: absolute; right: 100%; padding-right: 6px; font-size: 0.68rem; color: #484f58; transform: translateY(-50%); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cols-grid .gline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border-soft); }
+  .cols-grid .gtick {
+    position: absolute; right: 100%;
+    padding-right: 8px;
+    font-size: 0.72rem;
+    color: var(--faint);
+    transform: translateY(-50%);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    font-family: var(--mono);
+  }
   .cols-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 2px; }
-  .col-slot { flex: 1; min-width: 3px; max-width: 24px; display: flex; flex-direction: column-reverse; height: 100%; justify-content: flex-start; }
+  .col-slot { flex: 1; min-width: 3px; max-width: 26px; display: flex; flex-direction: column-reverse; height: 100%; justify-content: flex-start; }
   .col-seg { width: 100%; margin-top: 2px; }
   .col-seg:last-child { border-radius: 3px 3px 0 0; }
-  .cols-x { margin-left: 46px; display: flex; justify-content: space-between; font-size: 0.68rem; color: #484f58; margin-top: 6px; }
-  .hbars .hb-row { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
-  .hbars .hb-name { width: 190px; font-size: 0.78rem; color: #c9d1d9; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: monospace; }
-  .hbars .hb-track { flex: 1; display: flex; align-items: center; gap: 8px; }
-  .hbars .hb-bar { height: 14px; border-radius: 0 3px 3px 0; background: #3987e5; min-width: 2px; }
-  .hbars .hb-val { font-size: 0.72rem; color: #8b949e; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .stats-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-  .stats-table th { text-align: right; color: #484f58; font-weight: 500; padding: 5px 10px; border-bottom: 1px solid #21262d; }
-  .stats-table th:first-child, .stats-table td:first-child { text-align: left; font-family: monospace; }
-  .stats-table td { text-align: right; color: #8b949e; padding: 4px 10px; border-bottom: 1px solid #1c2128; font-variant-numeric: tabular-nums; }
-  .stats-table td:first-child { color: #c9d1d9; }
+  .cols-x {
+    margin-left: 50px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: var(--faint);
+    margin-top: 8px;
+    font-family: var(--mono);
+  }
+  .hbars .hb-row { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+  .hbars .hb-name {
+    width: 200px;
+    font-size: 0.82rem;
+    color: var(--text);
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--mono);
+  }
+  .hbars .hb-track { flex: 1; display: flex; align-items: center; gap: 10px; }
+  .hbars .hb-bar { height: 15px; border-radius: 0 3px 3px 0; background: #3987e5; min-width: 2px; }
+  .hbars .hb-val {
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    font-family: var(--mono);
+  }
+  .stats-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+  .stats-table th {
+    text-align: right;
+    color: var(--faint);
+    font-weight: 500;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .stats-table th:first-child, .stats-table td:first-child { text-align: left; font-family: var(--mono); }
+  .stats-table td {
+    text-align: right;
+    color: var(--muted);
+    padding: 5px 12px;
+    border-bottom: 1px solid var(--border-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  .stats-table td:first-child { color: var(--text); }
   .chart-tip {
     position: fixed;
-    background: #1c2128;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-size: 0.78rem;
-    color: #8b949e;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 13px;
+    font-size: 0.82rem;
+    color: var(--muted);
     pointer-events: none;
     z-index: 40;
     display: none;
-    max-width: 280px;
+    max-width: 300px;
   }
-  .chart-tip .tv { color: #e6edf3; font-weight: 600; }
+  .chart-tip .tv { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-  /* -- Mobile -- */
-  @media (max-width: 768px) {
-    body { padding: 12px; }
-    .header { padding: 0 4px 16px; }
-    .groups {
-      flex-direction: column;
-      overflow-x: visible;
-      padding: 0 4px 16px;
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+
+  /* ---------- mobile ---------- */
+  @media (max-width: 900px) {
+    .appbody { grid-template-columns: 1fr; }
+    .sidebar {
+      display: none;
+      position: static;
+      max-height: none;
+      border-right: none;
+      border-bottom: 1px solid var(--border-soft);
     }
-    .group { flex: none; min-width: 0; width: 100%; }
-    .card { padding: 12px 14px; }
+    .sidebar.open { display: flex; }
+    .filters-btn { display: inline-block; }
+    .topbar { padding: 10px 12px; }
+    .kpis { order: 3; width: 100%; justify-content: flex-start; }
+    .feed { padding: 12px 12px 40px; }
+    .card { padding: 12px 14px 10px; }
+    .actions { margin-left: 0; width: 100%; justify-content: flex-end; }
     .modal-overlay { padding: 0; align-items: stretch; }
     .modal { width: 100%; border-radius: 0; min-height: 100%; }
+    .hbars .hb-name { width: 110px; }
   }
 </style>
 </head>
@@ -531,6 +694,8 @@
 <script src="sessions-meta.js" onerror="console.warn('sessions-meta.js not found - no local edits yet')"></script>
 <script src="https://cdn.jsdelivr.net/npm/@maleta/blokjs/dist/blokjs.min.js"></script>
 <script>
+// ===================== shared helpers =====================
+
 function relativeTime(dateStr) {
   if (!dateStr) return '';
   const ts = Date.parse(dateStr.replace(' ', 'T') + 'Z');
@@ -538,13 +703,13 @@ function relativeTime(dateStr) {
   const diff = Math.floor((Date.now() - ts) / 1000);
   if (diff < 60) return 'just now';
   if (diff < 120) return '1 minute ago';
-  if (diff < 3600) return '~' + Math.floor(diff / 60) + ' minutes ago';
-  if (diff < 7200) return '~1 hour ago';
-  if (diff < 86400) return '~' + Math.floor(diff / 3600) + ' hours ago';
+  if (diff < 3600) return Math.floor(diff / 60) + ' minutes ago';
+  if (diff < 7200) return '1 hour ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + ' hours ago';
   if (diff < 172800) return 'yesterday';
   if (diff < 604800) return Math.floor(diff / 86400) + ' days ago';
   if (diff < 2592000) return Math.floor(diff / 604800) + ' weeks ago';
-  return dateStr;
+  return Math.floor(diff / 2592000) + ' months ago';
 }
 
 function formatTokens(n) {
@@ -555,23 +720,163 @@ function formatTokens(n) {
   return String(n);
 }
 
-// Served over http (serve.ts)? Then clicking a card resumes the session
-// in a new terminal via POST /api/resume, and metadata (edits, archive,
-// delete, notes) can be written via POST /api/meta. On file:// the UI is
-// read-only apart from the legacy per-browser hide.
-const SERVER_MODE = location.protocol === 'http:' || location.protocol === 'https:';
+// Timestamps are stored as UTC "YYYY-MM-DD HH:MM"; show them in local time.
+function fmtExact(dateStr) {
+  if (!dateStr) return '';
+  const ts = Date.parse(dateStr.replace(' ', 'T') + 'Z');
+  if (isNaN(ts)) return dateStr;
+  const d = new Date(ts);
+  const opts = { day: 'numeric', month: 'short' };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  const date = d.toLocaleDateString(undefined, opts);
+  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+  return date + ', ' + time;
+}
+
+function durationMinutes(startStr, endStr) {
+  const a = Date.parse((startStr || '').replace(' ', 'T') + 'Z');
+  const b = Date.parse((endStr || '').replace(' ', 'T') + 'Z');
+  if (isNaN(a) || isNaN(b) || b <= a) return 0;
+  return Math.round((b - a) / 60000);
+}
+
+function fmtDuration(min) {
+  if (min < 1) return '';
+  if (min < 60) return min + 'm';
+  const h = Math.floor(min / 60), m = min % 60;
+  if (h < 48) return h + 'h' + (m ? ' ' + m + 'm' : '');
+  return Math.floor(h / 24) + 'd ' + (h % 24) + 'h';
+}
+
+function money(v) {
+  if (v >= 100) return '$' + Math.round(v).toLocaleString('en-US');
+  if (v > 0 && v < 0.01) return '<$0.01';
+  return '$' + v.toFixed(2);
+}
+
+// ---- API-equivalent pricing ($/1M tokens, Claude API rates as of 2026-06).
+// Cache read ≈ 0.1× input, cache write ≈ 1.25× input (5-minute TTL).
+// Keyed by family + version from the raw model id in the transcript.
+function resolveRate(modelId) {
+  const m = String(modelId).toLowerCase().match(/(opus|sonnet|haiku|fable)[-\s]?(\d+)(?:[.-](\d)(?!\d))?/);
+  if (!m) return null;
+  const ver = parseFloat(m[2] + '.' + (m[3] || '0'));
+  if (m[1] === 'fable') return { in: 10, out: 50 };
+  if (m[1] === 'opus') return ver >= 4.5 ? { in: 5, out: 25 } : { in: 15, out: 75 };
+  if (m[1] === 'sonnet') return { in: 3, out: 15 };
+  if (m[1] === 'haiku') return ver >= 4.5 ? { in: 1, out: 5 } : { in: 0.8, out: 4 };
+  return null;
+}
+
+const FALLBACK_RATE = { in: 5, out: 25 };
+const FALLBACK_NAME = 'Opus 4.8';
+
+function modelDisplay(id) {
+  const m = String(id).toLowerCase().match(/(opus|sonnet|haiku|fable)[-\s]?(\d+)(?:[.-](\d)(?!\d))?/);
+  if (!m) return String(id).replace(/^claude-/, '');
+  return m[1][0].toUpperCase() + m[1].slice(1) + ' ' + m[2] + (m[3] ? '.' + m[3] : '');
+}
+
+function usageCost(tk, rate) {
+  return ((tk.input || 0) * rate.in + (tk.output || 0) * rate.out
+    + (tk.cache_read || 0) * 0.1 * rate.in + (tk.cache_write || 0) * 1.25 * rate.in) / 1e6;
+}
+
+/**
+ * Cost of one session. Uses the per-model breakdown when the session has it
+ * (exact); otherwise falls back to `fallbackRate` on the totals (estimated).
+ */
+function sessionCostInfo(s, fallbackRate, fallbackName) {
+  const rate = fallbackRate || FALLBACK_RATE;
+  const entries = Object.entries(s.models || {});
+  if (entries.length > 0) {
+    const byName = new Map();
+    for (const [id, tk] of entries) {
+      const name = modelDisplay(id);
+      const cur = byName.get(name) || { name, tok: 0, out: 0, cost: 0 };
+      cur.tok += (tk.input || 0) + (tk.output || 0) + (tk.cache_read || 0) + (tk.cache_write || 0);
+      cur.out += tk.output || 0;
+      cur.cost += usageCost(tk, resolveRate(id) || rate);
+      byName.set(name, cur);
+    }
+    const rows = Array.from(byName.values()).sort((a, b) => b.out - a.out);
+    return { value: rows.reduce((sum, r) => sum + r.cost, 0), estimated: false, rows };
+  }
+  const tk = s.tokens || {};
+  return {
+    value: usageCost(tk, rate),
+    estimated: true,
+    rows: [{
+      name: (fallbackName || FALLBACK_NAME) + ' (assumed)',
+      tok: (tk.input || 0) + (tk.output || 0) + (tk.cache_read || 0) + (tk.cache_write || 0),
+      out: tk.output || 0,
+      cost: usageCost(tk, rate),
+    }],
+  };
+}
 
 function accountHue(key) {
   let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
   return h % 360;
 }
-
 function accountDotStyle(key) {
   return 'background: hsl(' + accountHue(key) + ', 55%, 60%)';
 }
 
+// ---- Search query with operators: free text + key:value terms.
+const QUERY_KEYS = ['host', 'machine', 'status', 'project', 'account', 'model', 'branch', 'before', 'after'];
+
+function parseQuery(q) {
+  const ops = {}, free = [];
+  for (const t of q.split(/\s+/)) {
+    if (!t) continue;
+    const i = t.indexOf(':');
+    const key = i > 0 ? t.slice(0, i) : '';
+    if (QUERY_KEYS.includes(key) && t.length > i + 1) {
+      const k = key === 'machine' ? 'host' : key;
+      (ops[k] = ops[k] || []).push(t.slice(i + 1));
+    } else {
+      free.push(t);
+    }
+  }
+  return { ops, free };
+}
+
+function matchesQuery(s, pq) {
+  for (const w of pq.free) if (!s._search.includes(w)) return false;
+  for (const key in pq.ops) {
+    const vals = pq.ops[key];
+    if (key === 'before') {
+      const d = (s.started_at || '').slice(0, 10);
+      if (!d || !vals.every(v => d <= v)) return false;
+      continue;
+    }
+    if (key === 'after') {
+      const d = (s.updated_at || s.started_at || '').slice(0, 10);
+      if (!d || !vals.every(v => d >= v)) return false;
+      continue;
+    }
+    const field =
+      key === 'host' ? s._host.toLowerCase() :
+      key === 'status' ? (s.status || '').toLowerCase() :
+      key === 'project' ? ((s.project || '') + ' ' + (s.project_path || '')).toLowerCase() :
+      key === 'account' ? (s._accEmail + ' ' + s._accPlan).toLowerCase() :
+      key === 'model' ? s._modelSearch :
+      key === 'branch' ? (s.branch || '').toLowerCase() : '';
+    if (!vals.some(v => field.includes(v))) return false;
+  }
+  return true;
+}
+
+// Served over http (serve.ts)? Then the resume/fork buttons open a terminal
+// via POST /api/resume, and metadata (edits, archive, delete, notes) can be
+// written via POST /api/meta. On file:// the UI is read-only apart from the
+// legacy per-browser hide.
+const SERVER_MODE = location.protocol === 'http:' || location.protocol === 'https:';
+
 const STORAGE_KEY = 'claude-sessions-hidden';
+const PREFS_KEY = 'claude-sessions-prefs';
 
 function loadHidden() {
   try {
@@ -580,9 +885,18 @@ function loadHidden() {
   } catch (e) { /* ignore */ }
   return { sessions: [], projects: [] };
 }
-
 function saveHidden(sessions, projects) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessions, projects }));
+}
+function loadPrefs() {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* ignore */ }
+  return {};
+}
+function savePrefs(prefs) {
+  localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
 }
 
 function postMeta(id, patch) {
@@ -596,7 +910,7 @@ function postMeta(id, patch) {
 let _debounceTimer = null;
 
 // Pre-process sessions: apply the metadata overlay (user edits win over the
-// hook's analysis), sort (pinned first), build search index + derived fields.
+// hook's analysis), build search index + every derived display field.
 function buildSessions(rawList) {
   return (rawList || [])
     .map(s => ({
@@ -612,6 +926,10 @@ function buildSessions(rawList) {
       const summary = m.summary || s.summary;
       const topics = m.topics || s.topics || '';
       const status = m.status || s.status;
+      const cost = sessionCostInfo(s);
+      const durMin = durationMinutes(s.started_at, s.updated_at);
+      const tokTotal = (tk.input || 0) + (tk.output || 0) + (tk.cache_write || 0) + (tk.cache_read || 0);
+      const modelNames = cost.estimated ? [] : cost.rows.map(r => r.name);
       return {
         ...s,
         title, summary, topics, status,
@@ -626,30 +944,40 @@ function buildSessions(rawList) {
         _accKey: (acc && acc.email) || '',
         _accEmail: (acc && acc.email) || 'untracked account',
         _accPlan: (acc && acc.plan) || '',
+        _accChipLabel: (acc && (acc.plan || acc.email)) || 'untracked',
         _accDotStyle: accountDotStyle((acc && acc.email) || ''),
         _search: [title, summary, topics, s.project, s.project_path, s.host || '', m.note || '',
-          (acc && acc.email) || '', (acc && acc.plan) || ''].join('\0').toLowerCase(),
+          s.branch || '', modelNames.join(' '), (acc && acc.email) || '', (acc && acc.plan) || '']
+          .join('\0').toLowerCase(),
         _topics: topics.split(',').map(t => t.trim()).filter(Boolean),
-        _badgeClass: 'badge badge-' + status,
+        _pillClass: 'pill pill-' + status,
         _msgLabel: s.messages + ' msgs',
-        _endPrefix: s.updated_at && s.updated_at !== s.started_at ? (status === 'completed' ? 'end' : 'latest') : '',
+        _endPrefix: s.updated_at && s.updated_at !== s.started_at ? (status === 'completed' ? 'end' : 'last') : '',
         _isHidden: false,
-        _tok: {
-          in: formatTokens(tk.input),
-          out: formatTokens(tk.output),
-          cw: formatTokens(tk.cache_write),
-          cr: formatTokens(tk.cache_read),
-        },
-        _tokTotal: tk.input + tk.output + tk.cache_write + tk.cache_read,
+        _costNum: cost.value,
+        _costLabel: (cost.estimated ? '~' : '') + money(cost.value),
+        _costEstimated: cost.estimated,
+        _costRows: cost.rows.map(r => ({
+          name: r.name,
+          tokLabel: formatTokens(r.tok) + ' tok',
+          costLabel: money(r.cost),
+        })),
+        _costTitle: cost.estimated
+          ? 'estimated at ' + FALLBACK_NAME + ' rates (no per-model data;\nrun backfill --update-tokens to fix)'
+          : cost.rows.map(r => r.name + ': ' + formatTokens(r.tok) + ' tok · ' + money(r.cost)).join('\n'),
+        _modelLabel: modelNames[0] || '',
+        _modelExtra: modelNames.length > 1 ? '+' + (modelNames.length - 1) : '',
+        _modelTitle: modelNames.join('\n'),
+        _modelSearch: (modelNames.join(' ') + ' ' + Object.keys(s.models || {}).join(' ')).toLowerCase(),
+        _durMin: durMin,
+        _durLabel: fmtDuration(durMin),
+        _tokTotal: tokTotal,
+        _tokTotalLabel: ' · ' + formatTokens(tokTotal) + ' tok',
         _tokTitle:
-          'regular: ' + tk.input.toLocaleString() + ' in / ' + tk.output.toLocaleString() + ' out\n' +
-          'cached: ' + tk.cache_read.toLocaleString() + ' read / ' + tk.cache_write.toLocaleString() + ' write',
+          'regular: ' + (tk.input || 0).toLocaleString() + ' in / ' + (tk.output || 0).toLocaleString() + ' out\n' +
+          'cached: ' + (tk.cache_read || 0).toLocaleString() + ' read / ' + (tk.cache_write || 0).toLocaleString() + ' write',
       };
-    })
-    .sort((a, b) =>
-      ((b._pinned ? 1 : 0) - (a._pinned ? 1 : 0)) ||
-      (b.updated_at || b.started_at).localeCompare(a.updated_at || a.started_at)
-    );
+    });
 }
 
 async function loadConfig() {
@@ -693,6 +1021,7 @@ const canEdit = SERVER_MODE && !!cfg.edit;
 let initialRaw = window.SESSIONS_DATA || [];
 try { initialRaw = await migrateLocalHidden(initialRaw, canEdit); } catch (e) { /* keep initial */ }
 const stored = loadHidden();
+const prefs = loadPrefs();
 
 const app = blok.mount('#app', {
   state: {
@@ -703,11 +1032,16 @@ const app = blok.mount('#app', {
     toastMsg: '',
     showArchived: false,
     showDeleted: false,
+    showAllProjects: false,
+    showFilters: false,
     hiddenSessionIds: stored.sessions,
     hiddenProjectPaths: stored.projects,
+    projectFilter: '__all__',
     accountFilter: '__all__',
     hostFilter: '__all__',
     statusFilter: '__all__',
+    sortKey: prefs.sort || 'recent',
+    density: prefs.density || 'comfortable',
     canResume: !!cfg.resume,
     canEdit: canEdit,
     serverHost: cfg.host || '',
@@ -736,6 +1070,9 @@ const app = blok.mount('#app', {
       let result = this.sessions;
       if (!this.showDeleted) result = result.filter(s => !s._deleted);
       if (!this.showArchived) result = result.filter(s => !s._archived);
+      if (this.projectFilter !== '__all__') {
+        result = result.filter(s => (s.project || s.project_path || 'unknown') === this.projectFilter);
+      }
       if (this.accountFilter !== '__all__') {
         result = result.filter(s => s._accKey === this.accountFilter);
       }
@@ -746,7 +1083,8 @@ const app = blok.mount('#app', {
         result = result.filter(s => s.status === this.statusFilter);
       }
       if (q) {
-        result = result.filter(s => s._search.includes(q));
+        const pq = parseQuery(q);
+        result = result.filter(s => matchesQuery(s, pq));
       }
       if (this.canEdit) return result;
       // Legacy per-browser hide (file:// or no-edit servers only)
@@ -754,30 +1092,50 @@ const app = blok.mount('#app', {
       const hiddenPaths = new Set(this.hiddenProjectPaths);
       if (this.showArchived) return result;
       return result.filter(s =>
-        !hiddenIds.has(s.id) && !hiddenPaths.has(s.project_path)
+        !hiddenIds.has(s.id) && !hiddenPaths.has(s.project_path) && !hiddenPaths.has(s.project)
       );
     },
-    grouped() {
+    feed() {
       void this.tick;
-      // Group by project NAME: with a synced dev folder the same repo lives
-      // at a different absolute path on every machine.
-      const map = new Map();
+      const arr = [...this.filtered];
+      const k = this.sortKey;
+      if (k === 'cost') arr.sort((a, b) => b._costNum - a._costNum);
+      else if (k === 'tokens') arr.sort((a, b) => b._tokTotal - a._tokTotal);
+      else if (k === 'duration') arr.sort((a, b) => b._durMin - a._durMin);
+      else arr.sort((a, b) =>
+        ((b._pinned ? 1 : 0) - (a._pinned ? 1 : 0)) ||
+        (b.updated_at || b.started_at).localeCompare(a.updated_at || a.started_at));
       const hiddenIds = new Set(this.hiddenSessionIds);
-      for (const s of this.filtered) {
-        const key = s.project || s.project_path || 'unknown';
-        if (!map.has(key)) map.set(key, { sessions: [], paths: new Set() });
+      for (const s of arr) {
         s._isHidden = s._archived || (!this.canEdit && hiddenIds.has(s.id));
-        s._startLabel = 'start: ' + relativeTime(s.started_at);
-        s._endLabel = s._endPrefix ? s._endPrefix + ': ' + relativeTime(s.updated_at) : '';
-        const g = map.get(key);
-        g.sessions.push(s);
-        if (s.project_path) g.paths.add(s.project_path);
+        s._startText = fmtExact(s.started_at);
+        s._endText = s._endPrefix ? fmtExact(s.updated_at) : '';
+        s._endRelText = ' · ' + relativeTime(s.updated_at);
+        s._startRelText = relativeTime(s.started_at);
+        s._endPrefixLabel = s._endPrefix + ' ';
+        s._startTitle = s.started_at + ' UTC';
+        s._endTitle = s.updated_at + ' UTC';
       }
-      return Array.from(map, ([key, g]) => ({
-        projectPath: key,
-        pathsTitle: Array.from(g.paths).join('\n') || key,
-        sessions: g.sessions,
-      }));
+      return arr;
+    },
+    projectFacets() {
+      const map = new Map();
+      for (const s of this.sessions) {
+        if (s._deleted) continue;
+        const key = s.project || s.project_path || 'unknown';
+        map.set(key, (map.get(key) || 0) + 1);
+      }
+      const all = Array.from(map, ([key, count]) => ({
+        key, count,
+        active: key === this.projectFilter,
+      })).sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+      return this.showAllProjects ? all : all.slice(0, 12);
+    },
+    projectsMoreText() {
+      const total = new Set(this.sessions.filter(s => !s._deleted)
+        .map(s => s.project || s.project_path || 'unknown')).size;
+      if (total <= 12) return '';
+      return this.showAllProjects ? 'show fewer' : '+ ' + (total - 12) + ' more';
     },
     accounts() {
       const map = new Map();
@@ -814,9 +1172,42 @@ const app = blok.mount('#app', {
       if (map.size < 2) return [];
       return Array.from(map, ([key, count]) => ({
         key, count,
-        badgeClass: 'badge badge-' + key,
+        dotStyle: 'background: ' + (key === 'completed' ? 'var(--ok)' : key === 'in-progress' ? 'var(--warn)'
+          : key === 'debugging' ? 'var(--err)' : 'var(--info)'),
         active: key === this.statusFilter,
       })).sort((a, b) => b.count - a.count);
+    },
+    kpis() {
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const weekStart = now.getTime() - 7 * 86400000;
+      let todayCount = 0, todayCost = 0, weekCost = 0;
+      for (const s of this.sessions) {
+        if (s._deleted) continue;
+        const ts = Date.parse((s.updated_at || s.started_at).replace(' ', 'T') + 'Z');
+        if (isNaN(ts)) continue;
+        if (ts >= todayStart) { todayCount++; todayCost += s._costNum; }
+        if (ts >= weekStart) { weekCost += s._costNum; }
+      }
+      return [
+        { key: 'today', value: String(todayCount), label: 'today' },
+        { key: 'tcost', value: money(todayCost), label: '$ today' },
+        { key: 'wcost', value: money(weekCost), label: '$ 7 days' },
+      ];
+    },
+    sortOptions() {
+      return [
+        { key: 'recent', label: 'recent' },
+        { key: 'cost', label: 'cost' },
+        { key: 'tokens', label: 'tokens' },
+        { key: 'duration', label: 'duration' },
+      ].map(o => ({ ...o, active: o.key === this.sortKey }));
+    },
+    isCompact() {
+      return this.density === 'compact';
+    },
+    densityBtnText() {
+      return this.density === 'compact' ? 'density: compact' : 'density: comfortable';
     },
     archivedCount() {
       if (this.canEdit) return this.sessions.filter(s => s._archived && !s._deleted).length;
@@ -831,6 +1222,15 @@ const app = blok.mount('#app', {
     },
     detailOpen() {
       return !!this.detail;
+    },
+    detailStartText() {
+      return this.detail ? fmtExact(this.detail.started_at) : '';
+    },
+    detailEndText() {
+      return this.detail ? fmtExact(this.detail.updated_at) : '';
+    },
+    detailEndRel() {
+      return this.detail ? ' · ' + relativeTime(this.detail.updated_at) : '';
     },
     archiveBtnText() {
       return this.detail && this.detail._archived ? 'Unarchive' : 'Archive';
@@ -848,38 +1248,38 @@ const app = blok.mount('#app', {
         active: this.editStatus === k,
       }));
     },
-    resumeHint() {
-      return this.canResume ? 'Resume this session in a new terminal' : '';
-    },
     statsText() {
-      const s = this.filtered.length;
-      const g = this.grouped.length;
-      return s + ' session' + (s !== 1 ? 's' : '') + (this.search ? ' matching' : '') +
-        ' in ' + g + ' project' + (g !== 1 ? 's' : '');
-    },
-    archivedBtnText() {
-      return (this.showArchived ? 'hide' : 'show') + ' ' + this.archivedCount + ' archived';
-    },
-    deletedBtnText() {
-      return (this.showDeleted ? 'hide' : 'show') + ' ' + this.deletedCount + ' deleted';
+      const list = this.filtered;
+      const projects = new Set(list.map(s => s.project || s.project_path || 'unknown')).size;
+      return list.length + ' session' + (list.length !== 1 ? 's' : '') + (this.search ? ' matching' : '') +
+        ' · ' + projects + ' project' + (projects !== 1 ? 's' : '');
     },
     tokensText() {
-      let inp = 0, out = 0, cw = 0, cr = 0;
+      let tok = 0, cost = 0;
       for (const s of this.filtered) {
-        const tk = s.tokens || {};
-        inp += tk.input || 0; out += tk.output || 0; cw += tk.cache_write || 0; cr += tk.cache_read || 0;
+        tok += s._tokTotal;
+        cost += s._costNum;
       }
-      return 'tokens · regular ' + formatTokens(inp) + ' in / ' + formatTokens(out) +
-        ' out · cached ' + formatTokens(cr) + ' read / ' + formatTokens(cw) + ' write';
+      return formatTokens(tok) + ' tok · ' + money(cost);
+    },
+    archivedBtnText() {
+      return (this.showArchived ? 'hide' : 'show') + ' archived (' + this.archivedCount + ')';
+    },
+    deletedBtnText() {
+      return (this.showDeleted ? 'hide' : 'show') + ' deleted (' + this.deletedCount + ')';
     },
   },
 
   methods: {
-    toggleArchived() {
-      this.showArchived = !this.showArchived;
+    toggleArchived() { this.showArchived = !this.showArchived; },
+    toggleDeleted() { this.showDeleted = !this.showDeleted; },
+    toggleAllProjects() { this.showAllProjects = !this.showAllProjects; },
+    toggleFilters() { this.showFilters = !this.showFilters; },
+    setProject(key) {
+      this.projectFilter = this.projectFilter === key ? '__all__' : key;
     },
-    toggleDeleted() {
-      this.showDeleted = !this.showDeleted;
+    setProjectFromCard(s) {
+      this.projectFilter = s.project || s.project_path || 'unknown';
     },
     setAccount(key) {
       this.accountFilter = this.accountFilter === key ? '__all__' : key;
@@ -890,9 +1290,15 @@ const app = blok.mount('#app', {
     setStatus(key) {
       this.statusFilter = this.statusFilter === key ? '__all__' : key;
     },
-    setEditStatus(key) {
-      this.editStatus = key;
+    setSort(key) {
+      this.sortKey = key;
+      savePrefs({ sort: this.sortKey, density: this.density });
     },
+    toggleDensity() {
+      this.density = this.density === 'compact' ? 'comfortable' : 'compact';
+      savePrefs({ sort: this.sortKey, density: this.density });
+    },
+    setEditStatus(key) { this.editStatus = key; },
     noop() { /* click.stop anchor for the modal panel */ },
     openStats() {
       if (window.__openStats) window.__openStats();
@@ -941,18 +1347,19 @@ const app = blok.mount('#app', {
       this.hiddenSessionIds = this.hiddenSessionIds.filter(x => x !== id);
       saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
     },
-    async hideProject(group) {
+    async archiveProject(key) {
       if (this.canEdit) {
-        for (const s of group.sessions) {
-          if (!s._archived) await postMeta(s.id, { archived: true }).catch(() => {});
+        for (const s of this.sessions) {
+          if (s._deleted || s._archived) continue;
+          if ((s.project || s.project_path || 'unknown') !== key) continue;
+          await postMeta(s.id, { archived: true }).catch(() => {});
         }
         this._toast('Project archived');
         await this.reloadData();
         return;
       }
-      const path = group.pathsTitle.split('\n')[0] || group.projectPath;
-      if (this.hiddenProjectPaths.includes(path)) return;
-      this.hiddenProjectPaths = [...this.hiddenProjectPaths, path];
+      if (this.hiddenProjectPaths.includes(key)) return;
+      this.hiddenProjectPaths = [...this.hiddenProjectPaths, key];
       saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
     },
     openDetail(s) {
@@ -969,9 +1376,7 @@ const app = blok.mount('#app', {
       this.detailId = '';
       this.pendingDelete = false;
     },
-    togglePin() {
-      this.editPinned = !this.editPinned;
-    },
+    togglePin() { this.editPinned = !this.editPinned; },
     async saveDetail() {
       const s = this.detail;
       if (!s || !this.canEdit) return;
@@ -1008,26 +1413,29 @@ const app = blok.mount('#app', {
     _isRemote(s) {
       return !!(s._host && this.serverHost && s._host !== this.serverHost);
     },
-    _copyRemote(s) {
+    _copy(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(() => this._fallbackCopy(text));
+      } else {
+        this._fallbackCopy(text);
+      }
+    },
+    _copyRemote(s, fork) {
       const remote = this.remotes[s._host] || {};
       const cmd = remote.command
         ? remote.command
             .replaceAll('{id}', s.id)
             .replaceAll('{path}', s.project_path || '')
             .replaceAll('{project}', s.project || '')
-        : 'claude --resume ' + s.id;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(cmd).catch(() => this._fallbackCopy(cmd));
-      } else {
-        this._fallbackCopy(cmd);
-      }
+        : 'claude --resume ' + s.id + (fork ? ' --fork-session' : '');
+      this._copy(cmd);
       this._toast('Session from "' + (remote.label || s._host) + '" - command copied', 2500);
     },
-    async resumeSession(s) {
+    async _launch(s, fork) {
       if (!this.canResume) return;
       if (this._isRemote(s)) {
         // Can't open a terminal on another machine - hand over the command
-        this._copyRemote(s);
+        this._copyRemote(s, fork);
         return;
       }
       this._toast('Opening terminal…', 2500);
@@ -1035,11 +1443,11 @@ const app = blok.mount('#app', {
         const res = await fetch('/api/resume', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-session-tracker': '1' },
-          body: JSON.stringify({ id: s.id }),
+          body: JSON.stringify(fork ? { id: s.id, fork: true } : { id: s.id }),
         });
         const data = await res.json().catch(() => ({}));
         if (data.ok) {
-          this._toast('Resuming in ' + data.terminal + '…', 2500);
+          this._toast((fork ? 'Forking in ' : 'Resuming in ') + data.terminal + '…', 2500);
         } else {
           this._toast('Error: ' + (data.error || res.status), 3500);
         }
@@ -1047,29 +1455,23 @@ const app = blok.mount('#app', {
         this._toast('Server error: ' + e.message, 3500);
       }
     },
+    resumeSession(s) { return this._launch(s, false); },
+    forkSession(s) { return this._launch(s, true); },
     copyResume(session) {
       // For sessions from another machine with a configured remote command,
       // copy that instead of a local cd that wouldn't exist here.
       if (this._isRemote(session) && this.remotes[session._host]) {
-        this._copyRemote(session);
+        this._copyRemote(session, false);
         return;
       }
       const cmd = 'cd ' + session.project_path + ' && claude --resume ' + session.id;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(cmd).catch(() => this._fallbackCopy(cmd));
-      } else {
-        this._fallbackCopy(cmd);
-      }
+      this._copy(cmd);
       this._toast('Copied to clipboard!');
     },
     copyId() {
       const s = this.detail;
       if (!s) return;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(s.id).catch(() => this._fallbackCopy(s.id));
-      } else {
-        this._fallbackCopy(s.id);
-      }
+      this._copy(s.id);
       this._toast('Session id copied');
     },
     _fallbackCopy(text) {
@@ -1086,223 +1488,267 @@ const app = blok.mount('#app', {
 
   view: ($) => ({
     div: { children: [
-      { div: { class: 'header', children: [
-        { h1: 'Claude Sessions' },
-        { div: { class: 'header-row', children: [
-          { span: { class: 'stats', text: $.statsText } },
-          { span: { class: 'stats', text: $.tokensText } },
-          { when: $.archivedCount, children: [
-            { button: {
-              class: ['toggle-hidden', { active: $.showArchived }],
-              click: 'toggleArchived',
-              text: $.archivedBtnText,
-            }},
+
+      { div: { class: 'topbar', children: [
+        { span: { class: 'brand', children: [
+          { span: { text: 'Claude Sessions' } },
+          { when: $.serverHost, children: [
+            { span: { class: 'bhost', text: ' · ' } },
+            { span: { class: 'bhost', text: $.serverHost } },
           ]},
-          { when: $.deletedCount, children: [
-            { button: {
-              class: ['toggle-hidden', { active: $.showDeleted }],
-              click: 'toggleDeleted',
-              text: $.deletedBtnText,
-            }},
-          ]},
-          { button: {
-            class: 'toggle-hidden',
-            click: 'openStats',
-            bind: { title: 'Usage dashboard: activity heatmap, tokens per day, cost equivalent' },
-            text: '📊 stats',
-          }},
-          ...(SERVER_MODE ? [] : [
-            { span: {
-              class: 'serve-hint',
-              bind: { title: 'Serve the UI locally to resume, edit, archive and delete sessions' },
-              text: 'tip: bun ~/.claude/session-tracker/serve.ts → resume/edit sessions from here',
-            }},
-          ]),
         ]}},
-        { when: $.hosts.length, children: [
-          { div: { class: 'header-row', children: [
-            { each: $.hosts, as: 'h', key: 'key', children: [
-              { button: {
-                class: ['account-chip', { active: $.h.active }],
-                click: 'setHost(h.key)',
-                bind: { title: 'Filter sessions by machine' },
-                children: [
-                  { span: { class: 'account-dot', bind: { style: $.h.dotStyle } } },
-                  { span: { text: $.h.name } },
-                  { span: { class: 'group-count', text: $.h.count } },
-                ],
-              }},
-            ]},
-          ]}},
-        ]},
-        { when: $.accounts.length, children: [
-          { div: { class: 'header-row', children: [
-            { each: $.accounts, as: 'acc', key: 'key', children: [
-              { button: {
-                class: ['account-chip', { active: $.acc.active }],
-                click: 'setAccount(acc.key)',
-                bind: { title: 'Filter sessions by this account' },
-                children: [
-                  { span: { class: 'account-dot', bind: { style: $.acc.dotStyle } } },
-                  { span: { text: $.acc.email } },
-                  { when: $.acc.plan, children: [
-                    { span: { class: 'account-plan', text: $.acc.plan } },
-                  ]},
-                  { span: { class: 'group-count', text: $.acc.count } },
-                ],
-              }},
-            ]},
-          ]}},
-        ]},
-        { when: $.statuses.length, children: [
-          { div: { class: 'header-row', children: [
-            { each: $.statuses, as: 'st', key: 'key', children: [
-              { button: {
-                class: ['account-chip', { active: $.st.active }],
-                click: 'setStatus(st.key)',
-                bind: { title: 'Filter sessions by status' },
-                children: [
-                  { span: { class: $.st.badgeClass, text: $.st.key } },
-                  { span: { class: 'group-count', text: $.st.count } },
-                ],
-              }},
-            ]},
-          ]}},
-        ]},
         { input: {
           class: 'search-box',
           type: 'text',
-          bind: { placeholder: 'Search sessions by title, summary, topics, notes, project, machine...' },
+          bind: { placeholder: 'Search…  free text + host: status: project: model: account: branch: before: after:' },
           model: $.searchInput,
+        }},
+        { div: { class: 'kpis', children: [
+          { each: $.kpis, as: 'k', key: 'key', children: [
+            { span: { class: 'kpi', children: [
+              { b: { text: $.k.value } },
+              { small: { text: $.k.label } },
+            ]}},
+          ]},
+        ]}},
+        { button: {
+          class: 'iconbtn',
+          click: 'openStats',
+          bind: { title: 'Usage dashboard: activity heatmap, tokens per day, cost' },
+          text: '📊 stats',
+        }},
+        { button: {
+          class: ['iconbtn', 'filters-btn', { active: $.showFilters }],
+          click: 'toggleFilters',
+          text: '☰ filters',
         }},
       ]}},
 
-      { div: { class: 'groups', children: [
-        { each: $.grouped, as: 'group', key: 'projectPath', children: [
-          { div: { class: 'group', children: [
-            { div: { class: 'group-header', children: [
-              { span: { class: 'group-path', bind: { title: $.group.pathsTitle }, text: $.group.projectPath } },
-              { span: { class: 'group-count', text: $.group.sessions.length } },
-              { button: {
-                class: 'hide-btn',
-                'click.stop': 'hideProject(group)',
-                bind: { title: 'Archive all sessions in this project' },
-                text: 'hide',
-              }},
-            ]}},
-            { div: { class: 'cards', children: [
-              { each: $.group.sessions, as: 's', key: 'id', children: [
-                { div: {
-                  class: { card: true, 'card-hidden': $.s._isHidden, 'card-deleted': $.s._deleted, 'card-clickable': $.canResume },
-                  ...(SERVER_MODE
-                    ? { click: 'resumeSession(s)', bind: { title: $.resumeHint } }
-                    : {}),
-                  children: [
-                  { div: { class: 'card-top', children: [
-                    { div: { class: 'card-dates', children: [
-                      { span: { class: 'card-date', bind: { title: $.s.started_at }, text: $.s._startLabel } },
-                      { when: $.s._endLabel, children: [
-                        { span: { class: 'card-date', bind: { title: $.s.updated_at }, text: $.s._endLabel } },
-                      ]},
-                    ]}},
-                    { div: { class: 'card-meta', children: [
-                      { when: $.hosts.length, children: [
-                        { span: { class: 'card-account', bind: { title: 'Machine this session ran on' }, children: [
-                          { span: { class: 'account-dot', bind: { style: $.s._hostDotStyle } } },
-                          { span: { text: $.s._host } },
-                        ]}},
-                      ]},
-                      { when: $.accounts.length, children: [
-                        { span: { class: 'card-account', bind: { title: $.s._accEmail }, children: [
-                          { span: { class: 'account-dot', bind: { style: $.s._accDotStyle } } },
-                          { span: { text: $.s._accPlan } },
-                        ]}},
-                      ]},
-                      { span: { text: $.s.branch } },
-                      { span: { text: $.s._msgLabel } },
-                      { span: { class: $.s._badgeClass, text: $.s.status } },
-                    ]}},
-                  ]}},
-                  { div: { class: 'card-title', 'click.stop': 'openDetail(s)',
-                      bind: { title: 'Open details / edit' }, children: [
-                    { when: $.s._pinned, children: [ { span: { class: 'card-pin', text: '★' } } ]},
-                    { span: { text: $.s.title } },
-                  ]}},
-                  { div: { class: 'card-summary', text: $.s.summary } },
-                  { when: $.s._note, children: [
-                    { div: { class: 'card-note', text: $.s._note } },
-                  ]},
-                  { div: { class: 'card-tokens', bind: { title: $.s._tokTitle }, children: [
-                    { span: { children: [
-                      { span: { class: 'tok-label', text: 'in ' } },
-                      { span: { class: 'tok-val', text: $.s._tok.in } },
-                    ]}},
-                    { span: { children: [
-                      { span: { class: 'tok-label', text: 'out ' } },
-                      { span: { class: 'tok-val', text: $.s._tok.out } },
-                    ]}},
-                    { span: { children: [
-                      { span: { class: 'tok-label', text: 'cache read ' } },
-                      { span: { class: 'tok-val', text: $.s._tok.cr } },
-                    ]}},
-                    { span: { children: [
-                      { span: { class: 'tok-label', text: 'cache write ' } },
-                      { span: { class: 'tok-val', text: $.s._tok.cw } },
-                    ]}},
-                  ]}},
-                  { div: { class: 'card-footer', children: [
-                    { div: { class: 'topics', children: [
-                      { each: $.s._topics, as: 't', children: [
-                        { span: { class: 'topic', text: $.t } },
-                      ]},
-                    ]}},
-                    { div: { class: 'card-actions', children: [
-                      { when: $.s._deleted, children: [
-                        { button: {
-                          class: 'restore-btn',
-                          'click.stop': 'restoreDeleted(s.id)',
-                          text: 'restore',
-                        }},
-                      ]},
-                      { when: $.not.s._deleted, children: [
-                        { when: $.s._isHidden, children: [
-                          { button: {
-                            class: 'restore-btn',
-                            'click.stop': 'restoreSession(s.id)',
-                            text: 'restore',
-                          }},
-                        ]},
-                        { when: $.not.s._isHidden, children: [
-                          { button: {
-                            class: 'hide-btn',
-                            'click.stop': 'hideSession(s.id)',
-                            text: 'hide',
-                          }},
-                        ]},
-                      ]},
-                      { button: {
-                        class: 'resume-btn',
-                        'click.stop': 'openDetail(s)',
-                        bind: { title: 'Details / edit' },
-                        text: 'details',
-                      }},
-                      { button: {
-                        class: 'resume-btn',
-                        'click.stop': 'copyResume(s)',
-                        bind: { title: 'Copy resume command' },
-                        text: 'copy resume cmd',
-                      }},
-                    ]}},
-                  ]}},
+      { div: { class: 'appbody', children: [
+
+        { div: { class: ['sidebar', { open: $.showFilters }], children: [
+          { div: { class: 'facet', children: [
+            { h4: 'Projects' },
+            { each: $.projectFacets, as: 'p', key: 'key', children: [
+              { div: { class: ['facet-row', { on: $.p.active }], click: 'setProject(p.key)', children: [
+                { span: { class: 'fname mono', bind: { title: $.p.key }, text: $.p.key } },
+                { span: { class: 'cnt', text: $.p.count } },
+                { button: {
+                  class: 'fhide',
+                  'click.stop': 'archiveProject(p.key)',
+                  bind: { title: 'Archive all sessions in this project' },
+                  text: '✕',
+                }},
+              ]}},
+            ]},
+            { when: $.projectsMoreText, children: [
+              { button: { class: 'facet-more', click: 'toggleAllProjects', text: $.projectsMoreText } },
+            ]},
+          ]}},
+          { when: $.hosts.length, children: [
+            { div: { class: 'facet', children: [
+              { h4: 'Machines' },
+              { each: $.hosts, as: 'h', key: 'key', children: [
+                { div: { class: ['facet-row', { on: $.h.active }], click: 'setHost(h.key)', children: [
+                  { span: { class: 'swatch', bind: { style: $.h.dotStyle } } },
+                  { span: { class: 'fname', text: $.h.name } },
+                  { span: { class: 'cnt', text: $.h.count } },
                 ]}},
               ]},
             ]}},
+          ]},
+          { when: $.accounts.length, children: [
+            { div: { class: 'facet', children: [
+              { h4: 'Accounts' },
+              { each: $.accounts, as: 'acc', key: 'key', children: [
+                { div: { class: ['facet-row', { on: $.acc.active }], click: 'setAccount(acc.key)',
+                    bind: { title: $.acc.email }, children: [
+                  { span: { class: 'swatch', bind: { style: $.acc.dotStyle } } },
+                  { span: { class: 'fname', text: $.acc.email } },
+                  { when: $.acc.plan, children: [
+                    { span: { class: 'cnt', text: $.acc.plan } },
+                  ]},
+                  { span: { class: 'cnt', text: $.acc.count } },
+                ]}},
+              ]},
+            ]}},
+          ]},
+          { when: $.statuses.length, children: [
+            { div: { class: 'facet', children: [
+              { h4: 'Status' },
+              { each: $.statuses, as: 'st', key: 'key', children: [
+                { div: { class: ['facet-row', { on: $.st.active }], click: 'setStatus(st.key)', children: [
+                  { span: { class: 'st-dot', bind: { style: $.st.dotStyle } } },
+                  { span: { class: 'fname', text: $.st.key } },
+                  { span: { class: 'cnt', text: $.st.count } },
+                ]}},
+              ]},
+            ]}},
+          ]},
+          { div: { class: 'facet', children: [
+            { h4: 'View' },
+            { when: $.archivedCount, children: [
+              { div: { class: ['facet-row', { on: $.showArchived }], click: 'toggleArchived', children: [
+                { span: { class: 'fname', text: $.archivedBtnText } },
+              ]}},
+            ]},
+            { when: $.deletedCount, children: [
+              { div: { class: ['facet-row', { on: $.showDeleted }], click: 'toggleDeleted', children: [
+                { span: { class: 'fname', text: $.deletedBtnText } },
+              ]}},
+            ]},
+            ...(SERVER_MODE ? [] : [
+              { div: {
+                class: 'serve-hint',
+                bind: { title: 'Serve the UI locally to resume, fork, edit, archive and delete sessions' },
+                text: 'tip: bun ~/.claude/session-tracker/serve.ts → resume/edit sessions from here',
+              }},
+            ]),
           ]}},
-        ]},
+        ]}},
 
-        { when: $.not.filtered.length, children: [
-          { div: { class: 'no-results', text: 'No sessions found.' } },
-        ]},
+        { div: { class: 'feed', children: [
+          { div: { class: 'feed-tools', children: [
+            { span: { text: $.statsText } },
+            { span: { text: $.tokensText } },
+            { span: { class: 'spacer' } },
+            { span: { class: 'flabel', text: 'sort' } },
+            { each: $.sortOptions, as: 'o', key: 'key', children: [
+              { button: {
+                class: ['tool-chip', { active: $.o.active }],
+                click: 'setSort(o.key)',
+                text: $.o.label,
+              }},
+            ]},
+            { button: { class: 'tool-chip', click: 'toggleDensity', text: $.densityBtnText } },
+          ]}},
+
+          { div: { class: ['cards', { compact: $.isCompact }], children: [
+            { each: $.feed, as: 's', key: 'id', children: [
+              { div: {
+                class: { card: true, pinned: $.s._pinned, 'card-hidden': $.s._isHidden, 'card-deleted': $.s._deleted },
+                click: 'openDetail(s)',
+                bind: { title: 'Open details' },
+                children: [
+
+                { div: { class: 'card-head', children: [
+                  { when: $.s._pinned, children: [ { span: { class: 'card-pin', text: '★' } } ]},
+                  { span: { class: 'card-title', text: $.s.title } },
+                  { span: { class: 'cost', bind: { title: $.s._costTitle }, children: [
+                    { span: { text: $.s._costLabel } },
+                    { small: { text: $.s._tokTotalLabel } },
+                  ]}},
+                ]}},
+
+                { div: { class: 'meta', children: [
+                  { span: { class: $.s._pillClass, text: $.s.status } },
+                  { when: $.s._modelLabel, children: [
+                    { span: { class: 'chip model', bind: { title: $.s._modelTitle }, children: [
+                      { span: { text: $.s._modelLabel } },
+                      { when: $.s._modelExtra, children: [ { span: { text: $.s._modelExtra } } ]},
+                    ]}},
+                  ]},
+                  { span: {
+                    class: 'chip proj',
+                    'click.stop': 'setProjectFromCard(s)',
+                    bind: { title: $.s.project_path },
+                    text: $.s.project,
+                  }},
+                  { span: { class: 'mono', text: $.s.branch } },
+                  { span: { class: 'sep', text: '·' } },
+                  { span: { text: $.s._msgLabel } },
+                  { when: $.s._durLabel, children: [
+                    { span: { class: 'sep', text: '·' } },
+                    { span: { bind: { title: 'Time between first and last activity' }, text: $.s._durLabel } },
+                  ]},
+                  { when: $.hosts.length, children: [
+                    { span: { class: 'chip', bind: { title: 'Machine this session ran on' }, children: [
+                      { span: { class: 'swatch', bind: { style: $.s._hostDotStyle } } },
+                      { span: { text: $.s._host } },
+                    ]}},
+                  ]},
+                  { when: $.accounts.length, children: [
+                    { span: { class: 'chip', bind: { title: $.s._accEmail }, children: [
+                      { span: { class: 'swatch', bind: { style: $.s._accDotStyle } } },
+                      { span: { text: $.s._accChipLabel } },
+                    ]}},
+                  ]},
+                ]}},
+
+                { div: { class: 'card-summary', text: $.s.summary } },
+                { when: $.s._note, children: [
+                  { div: { class: 'card-note', text: $.s._note } },
+                ]},
+
+                { div: { class: 'card-foot', children: [
+                  { div: { class: 'topics', children: [
+                    { each: $.s._topics, as: 't', children: [
+                      { span: { class: 'topic', text: $.t } },
+                    ]},
+                  ]}},
+                  { div: { class: 'dates', children: [
+                    { span: { bind: { title: $.s._startTitle }, children: [
+                      { span: { text: 'started ' } },
+                      { span: { class: 'dval', text: $.s._startText } },
+                    ]}},
+                    { when: $.s._endText, children: [
+                      { span: { bind: { title: $.s._endTitle }, children: [
+                        { span: { text: $.s._endPrefixLabel } },
+                        { span: { class: 'dval', text: $.s._endText } },
+                        { span: { class: 'rel', text: $.s._endRelText } },
+                      ]}},
+                    ]},
+                    { when: $.not.s._endText, children: [
+                      { span: { class: 'rel', text: $.s._startRelText } },
+                    ]},
+                  ]}},
+                  { div: { class: 'actions', children: [
+                    { when: $.s._deleted, children: [
+                      { button: { class: 'abtn good', 'click.stop': 'restoreDeleted(s.id)', text: 'restore' } },
+                    ]},
+                    { when: $.not.s._deleted, children: [
+                      { when: $.s._isHidden, children: [
+                        { button: { class: 'abtn good', 'click.stop': 'restoreSession(s.id)', text: 'restore' } },
+                      ]},
+                      { when: $.not.s._isHidden, children: [
+                        { button: {
+                          class: 'abtn danger',
+                          'click.stop': 'hideSession(s.id)',
+                          bind: { title: 'Archive this session' },
+                          text: 'archive',
+                        }},
+                      ]},
+                    ]},
+                    { button: {
+                      class: 'abtn',
+                      'click.stop': 'copyResume(s)',
+                      bind: { title: 'Copy resume command' },
+                      text: 'copy cmd',
+                    }},
+                    { when: $.canResume, children: [
+                      { button: {
+                        class: 'abtn',
+                        'click.stop': 'forkSession(s)',
+                        bind: { title: 'Resume as a NEW branched session (claude --resume --fork-session): the original stays untouched' },
+                        text: '⑂ fork',
+                      }},
+                      { button: {
+                        class: 'abtn primary',
+                        'click.stop': 'resumeSession(s)',
+                        bind: { title: 'Resume this session in a new terminal' },
+                        text: '▶ resume',
+                      }},
+                    ]},
+                  ]}},
+                ]}},
+              ]}},
+            ]},
+
+            { when: $.not.feed.length, children: [
+              { div: { class: 'no-results', text: 'No sessions found.' } },
+            ]},
+          ]}},
+        ]}},
       ]}},
 
       { when: $.detailOpen, children: [
@@ -1313,13 +1759,37 @@ const app = blok.mount('#app', {
               { span: { class: 'k', text: 'machine' } },   { span: { text: $.detail._host } },
               { span: { class: 'k', text: 'project' } },   { span: { text: $.detail.project_path } },
               { span: { class: 'k', text: 'branch' } },    { span: { text: $.detail.branch } },
-              { span: { class: 'k', text: 'started' } },   { span: { text: $.detail.started_at } },
-              { span: { class: 'k', text: 'updated' } },   { span: { text: $.detail.updated_at } },
+              { span: { class: 'k', text: 'started' } },   { span: { text: $.detailStartText } },
+              { span: { class: 'k', text: 'last' } },      { span: { children: [
+                { span: { text: $.detailEndText } },
+                { span: { class: 'rel', text: $.detailEndRel } },
+              ]}},
+              { span: { class: 'k', text: 'duration' } },  { span: { text: $.detail._durLabel } },
               { span: { class: 'k', text: 'messages' } },  { span: { text: $.detail._msgLabel } },
               { span: { class: 'k', text: 'account' } },   { span: { text: $.detail._accEmail } },
               { span: { class: 'k', text: 'tokens' } },    { span: { text: $.detail._tokTitle } },
               { span: { class: 'k', text: 'id' } },        { span: { text: $.detail.id } },
             ]}},
+
+            { span: { class: 'edit-label', text: 'Cost (API-equivalent)' } },
+            { ul: { class: 'cost-rows', children: [
+              { each: $.detail._costRows, as: 'cr', children: [
+                { li: { children: [
+                  { span: { text: $.cr.name } },
+                  { span: { text: ' · ' } },
+                  { span: { text: $.cr.tokLabel } },
+                  { span: { text: ' · ' } },
+                  { span: { class: 'cv', text: $.cr.costLabel } },
+                ]}},
+              ]},
+              { li: { children: [
+                { span: { text: 'total ' } },
+                { span: { class: 'cv', text: $.detail._costLabel } },
+              ]}},
+            ]}},
+            { when: $.detail._costEstimated, children: [
+              { div: { class: 'cost-note', text: 'No per-model data for this session - estimated at Opus 4.8 rates. Run "bun scripts/backfill.ts --update-tokens" to stamp exact per-model usage.' } },
+            ]},
 
             { when: $.canEdit, children: [
               { span: { class: 'edit-label', text: 'Title' } },
@@ -1361,6 +1831,10 @@ const app = blok.mount('#app', {
               { span: { class: 'spacer' } },
               { button: { class: 'btn', 'click.stop': 'copyId', text: 'Copy id' } },
               { button: { class: 'btn', 'click.stop': 'copyResume(detail)', text: 'Copy resume' } },
+              { when: $.canResume, children: [
+                { button: { class: 'btn', 'click.stop': 'forkSession(detail)', text: '⑂ Fork' } },
+                { button: { class: 'btn primary', 'click.stop': 'resumeSession(detail)', text: '▶ Resume' } },
+              ]},
               { button: { class: 'btn', 'click.stop': 'closeDetail', text: 'Close' } },
             ]}},
           ]}},
@@ -1388,16 +1862,16 @@ try {
 
 // ===================== Usage dashboard (vanilla DOM) =====================
 // Rendered outside blok into its own overlay. Palette validated with the
-// dataviz six-checks validator against surface #161b22 (dark):
+// dataviz six-checks validator against surface #10151c (dark):
 //   categorical (machines): #3987e5 #199e70 #c98500  (worst adjacent CVD ΔE 41.3)
 //   sequential heatmap ramp: #184f95 #256abf #3987e5 #6da7ec #9ec5f4 (monotone L)
 (function () {
   const SERIES = ['#3987e5', '#199e70', '#c98500'];
-  const OTHER_COLOR = '#8b949e';
-  const RAMP = ['#21262d', '#184f95', '#256abf', '#3987e5', '#6da7ec', '#9ec5f4'];
+  const OTHER_COLOR = '#94a1b1';
+  const RAMP = ['#171e27', '#184f95', '#256abf', '#3987e5', '#6da7ec', '#9ec5f4'];
 
-  // API-equivalent pricing, $/1M tokens (Claude API rates as of 2026-06).
-  // Cache: read ≈ 0.1× input, write ≈ 1.25× input (5-minute TTL).
+  // Fallback rates for sessions WITHOUT a per-model breakdown (imported
+  // before model tracking). Sessions with `models` use exact per-model rates.
   const PRICES = {
     'Fable 5':   { in: 10, out: 50 },
     'Opus 4.8':  { in: 5,  out: 25 },
@@ -1413,14 +1887,6 @@ try {
     if (cls) n.className = cls;
     if (text !== undefined) n.textContent = text;
     return n;
-  }
-
-  function money(v) {
-    return '$' + (v >= 100 ? Math.round(v).toLocaleString('en-US') : v.toFixed(2));
-  }
-
-  function cost(tk, p) {
-    return (tk.input * p.in + tk.output * p.out + tk.cache_read * 0.1 * p.in + tk.cache_write * 1.25 * p.in) / 1e6;
   }
 
   function dayKey(d) {
@@ -1457,7 +1923,7 @@ try {
     node.addEventListener('pointerleave', hideTip);
   }
 
-  function aggregate(sessions, days) {
+  function aggregate(sessions, days, p) {
     const now = new Date();
     const from = new Date(now); from.setDate(from.getDate() - (days - 1));
     const fromKey = days === Infinity ? '' : dayKey(from);
@@ -1465,26 +1931,40 @@ try {
     const inRange = live.filter(s => (s.started_at || '').slice(0, 10) >= fromKey);
     const byDay = new Map();
     const byProject = new Map();
+    const byModel = new Map();
     const hosts = new Map();
     const total = { input: 0, output: 0, cache_read: 0, cache_write: 0 };
+    let totalCost = 0;
+    let exact = 0;
     for (const s of inRange) {
       const day = (s.started_at || '').slice(0, 10);
       if (!day) continue;
       const tk = s.tokens || { input: 0, output: 0, cache_read: 0, cache_write: 0 };
       const host = s.host || 'unknown';
-      if (!byDay.has(day)) byDay.set(day, { sessions: 0, out: 0, total: 0, byHost: new Map() });
+      const sCost = sessionCostInfo(s, p, state.model);
+      totalCost += sCost.value;
+      if (!sCost.estimated) exact++;
+      if (!byDay.has(day)) byDay.set(day, { sessions: 0, out: 0, total: 0, cost: 0, byHost: new Map() });
       const d = byDay.get(day);
       d.sessions++; d.out += tk.output; d.total += tk.input + tk.output + tk.cache_read + tk.cache_write;
+      d.cost += sCost.value;
       d.byHost.set(host, (d.byHost.get(host) || 0) + tk.output);
       const proj = s.project || 'unknown';
-      if (!byProject.has(proj)) byProject.set(proj, { sessions: 0, input: 0, output: 0, cache_read: 0, cache_write: 0 });
+      if (!byProject.has(proj)) byProject.set(proj, { sessions: 0, input: 0, output: 0, cache_read: 0, cache_write: 0, cost: 0 });
       const P = byProject.get(proj);
       P.sessions++; P.input += tk.input; P.output += tk.output; P.cache_read += tk.cache_read; P.cache_write += tk.cache_write;
+      P.cost += sCost.value;
+      for (const row of sCost.rows) {
+        const name = row.name;
+        if (!byModel.has(name)) byModel.set(name, { sessions: 0, out: 0, tok: 0, cost: 0 });
+        const M = byModel.get(name);
+        M.sessions++; M.out += row.out; M.tok += row.tok; M.cost += row.cost;
+      }
       hosts.set(host, (hosts.get(host) || 0) + tk.output);
       total.input += tk.input; total.output += tk.output; total.cache_read += tk.cache_read; total.cache_write += tk.cache_write;
     }
     const hostOrder = Array.from(hosts.keys()).sort();
-    return { inRange, byDay, byProject, hostOrder, total };
+    return { inRange, byDay, byProject, byModel, hostOrder, total, totalCost, exact };
   }
 
   function hostColor(host, hostOrder) {
@@ -1496,8 +1976,8 @@ try {
     const inner = overlay.querySelector('.stats-inner');
     inner.replaceChildren();
     const days = state.range;
-    const agg = aggregate(state.sessions, days);
     const p = PRICES[state.model];
+    const agg = aggregate(state.sessions, days, p);
 
     // -- Head + filters --
     const head = el('div', 'stats-head');
@@ -1510,32 +1990,37 @@ try {
     const filters = el('div', 'stats-filters');
     filters.append(el('span', 'flabel', 'Range'));
     for (const [label, value] of [['7d', 7], ['30d', 30], ['90d', 90], ['all', Infinity]]) {
-      const b = el('button', 'account-chip' + (state.range === value ? ' active' : ''), label);
+      const b = el('button', 'tool-chip' + (state.range === value ? ' active' : ''), label);
       b.addEventListener('click', () => { state.range = value; render(); });
       filters.append(b);
     }
-    filters.append(el('span', 'flabel', '$ as'));
+    filters.append(el('span', 'flabel', 'fallback $'));
     for (const name of Object.keys(PRICES)) {
-      const b = el('button', 'account-chip' + (state.model === name ? ' active' : ''), name);
+      const b = el('button', 'tool-chip' + (state.model === name ? ' active' : ''), name);
+      b.title = 'Rate used only for sessions without per-model data';
       b.addEventListener('click', () => { state.model = name; render(); });
       filters.append(b);
     }
     inner.append(filters);
 
     // -- KPI row --
-    const kpis = el('div', 'kpis');
+    const kpis = el('div', 'kpigrid');
     const kpi = (label, value, sub) => {
-      const k = el('div', 'kpi');
+      const k = el('div', 'kpicard');
       k.append(el('div', 'klabel', label));
       k.append(el('div', 'kvalue', value));
       if (sub) k.append(el('div', 'ksub', sub));
       return k;
     };
     const t = agg.total;
+    const estCount = agg.inRange.length - agg.exact;
     kpis.append(kpi('Sessions', String(agg.inRange.length), 'archived included, deleted excluded'));
     kpis.append(kpi('Tokens generated', formatTokens(t.output), formatTokens(t.input) + ' in (regular)'));
     kpis.append(kpi('Cache read', formatTokens(t.cache_read), formatTokens(t.cache_write) + ' written'));
-    kpis.append(kpi('API-equivalent value', money(cost(t, p)), 'at ' + state.model + ' rates, 5m cache TTL'));
+    kpis.append(kpi('API-equivalent value', money(agg.totalCost),
+      estCount > 0
+        ? estCount + ' session' + (estCount !== 1 ? 's' : '') + ' estimated at ' + state.model + ' rates'
+        : 'exact per-model rates, 5m cache TTL'));
     inner.append(kpis);
 
     // -- Activity heatmap --
@@ -1567,7 +2052,7 @@ try {
         cell.style.background = RAMP[level(d ? d.sessions : 0)];
         const kd = key, dd = d;
         hover(cell, () => dd
-          ? [[kd], [' sessions', String(dd.sessions)], [' tokens (all)', formatTokens(dd.total)]]
+          ? [[kd], [' sessions', String(dd.sessions)], [' tokens (all)', formatTokens(dd.total)], [' ≈ value', money(dd.cost)]]
           : [[kd], ['no sessions']]);
         col.append(cell);
         c.setDate(c.getDate() + 1);
@@ -1643,6 +2128,7 @@ try {
             if (v) lines.push([' out · ' + h, formatTokens(v)]);
           }
           lines.push([' sessions', String(dd.sessions)]);
+          lines.push([' ≈ value', money(dd.cost)]);
         } else {
           lines.push(['no sessions']);
         }
@@ -1661,6 +2147,32 @@ try {
     }
     inner.append(dcCard);
 
+    // -- By model --
+    if (agg.byModel.size > 0) {
+      const bmCard = el('div', 'chart-card hbars');
+      bmCard.append(el('h3', null, 'By model'));
+      bmCard.append(el('div', 'csub', 'output tokens and API-equivalent value in range'));
+      const models = Array.from(agg.byModel, ([name, v]) => ({ name, ...v }))
+        .sort((a, b) => b.out - a.out);
+      const maxModel = Math.max(1, ...models.map(x => x.out));
+      for (const mrow of models) {
+        const row = el('div', 'hb-row');
+        row.append(el('div', 'hb-name', mrow.name));
+        const track = el('div', 'hb-track');
+        const bar = el('div', 'hb-bar');
+        bar.style.width = ((mrow.out / maxModel) * 100) + '%';
+        if (mrow.name.includes('(assumed)')) bar.style.background = OTHER_COLOR;
+        track.append(bar);
+        track.append(el('span', 'hb-val', formatTokens(mrow.out) + ' out · ' + money(mrow.cost)));
+        const mr = mrow;
+        hover(row, () => [[mr.name], [' sessions', String(mr.sessions)], [' out', formatTokens(mr.out)],
+          [' tokens (all)', formatTokens(mr.tok)], [' ≈ value', money(mr.cost)]]);
+        row.append(track);
+        bmCard.append(row);
+      }
+      inner.append(bmCard);
+    }
+
     // -- Top projects --
     const tpCard = el('div', 'chart-card hbars');
     tpCard.append(el('h3', null, 'Top projects'));
@@ -1670,10 +2182,10 @@ try {
     const top = projects.slice(0, 8);
     const rest = projects.slice(8);
     if (rest.length) {
-      const other = { name: 'other (' + rest.length + ' projects)', sessions: 0, input: 0, output: 0, cache_read: 0, cache_write: 0 };
+      const other = { name: 'other (' + rest.length + ' projects)', sessions: 0, input: 0, output: 0, cache_read: 0, cache_write: 0, cost: 0 };
       for (const r of rest) {
         other.sessions += r.sessions; other.input += r.input; other.output += r.output;
-        other.cache_read += r.cache_read; other.cache_write += r.cache_write;
+        other.cache_read += r.cache_read; other.cache_write += r.cache_write; other.cost += r.cost;
       }
       top.push(other);
     }
@@ -1686,10 +2198,10 @@ try {
       bar.style.width = ((proj.output / maxProj) * 100) + '%';
       if (proj.name.startsWith('other (')) bar.style.background = OTHER_COLOR;
       track.append(bar);
-      track.append(el('span', 'hb-val', formatTokens(proj.output)));
+      track.append(el('span', 'hb-val', formatTokens(proj.output) + ' · ' + money(proj.cost)));
       const pr = proj;
       hover(row, () => [[pr.name], [' sessions', String(pr.sessions)], [' out', formatTokens(pr.output)],
-        [' cache read', formatTokens(pr.cache_read)], [' ≈ value', money(cost(pr, p))]]);
+        [' cache read', formatTokens(pr.cache_read)], [' ≈ value', money(pr.cost)]]);
       row.append(track);
       tpCard.append(row);
     }
@@ -1712,7 +2224,7 @@ try {
       tr.append(el('td', null, formatTokens(proj.output)));
       tr.append(el('td', null, formatTokens(proj.cache_read)));
       tr.append(el('td', null, formatTokens(proj.cache_write)));
-      tr.append(el('td', null, money(cost(proj, p))));
+      tr.append(el('td', null, money(proj.cost)));
       tbody.append(tr);
     }
     table.append(tbody);

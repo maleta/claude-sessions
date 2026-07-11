@@ -39,9 +39,22 @@ const NO_EDIT = process.env.SESSION_TRACKER_NO_EDIT === "1";
 // running in a container (pair it with READONLY=1 unless you trust the LAN).
 const HOST = process.env.SESSION_TRACKER_HOST ?? "127.0.0.1";
 
+interface TokenUsage {
+  input?: number;
+  output?: number;
+  cache_write?: number;
+  cache_read?: number;
+}
+
 interface StoredSession {
   id: string;
+  project?: string;
   project_path?: string;
+  title?: string;
+  started_at?: string;
+  updated_at?: string;
+  tokens?: TokenUsage;
+  models?: Record<string, TokenUsage>;
   host?: string;
   meta?: MetaEntry | null;
 }
@@ -239,8 +252,8 @@ function hasWindowsTerminal(): boolean {
 }
 
 /** Opens a new terminal window running `claude --resume <id>` in `dir`. */
-function launchTerminal(sessionId: string, dir: string): string | null {
-  const resume = `claude --resume ${sessionId}`;
+function launchTerminal(sessionId: string, dir: string, fork = false): string | null {
+  const resume = `claude --resume ${sessionId}${fork ? " --fork-session" : ""}`;
 
   if (process.platform === "win32") {
     if (hasWindowsTerminal() && trySpawn(["cmd", "/c", "start", "", "wt", "-w", "-1", "nt", "-d", dir, "cmd", "/k", resume])) {
@@ -298,10 +311,11 @@ async function handleResume(req: Request): Promise<Response> {
     return json({ error: "missing x-session-tracker header" }, 403);
   }
 
-  let id = "";
+  let id = "", fork = false;
   try {
     const body = await req.json();
     id = String(body.id ?? "");
+    fork = body.fork === true;
   } catch {
     return json({ error: "invalid JSON body" }, 400);
   }
@@ -327,12 +341,80 @@ async function handleResume(req: Request): Promise<Response> {
     ? session.project_path
     : homedir();
 
-  const terminal = launchTerminal(session.id, dir);
+  const terminal = launchTerminal(session.id, dir, fork);
   if (!terminal) {
     return json({ error: "no supported terminal emulator found" }, 500);
   }
-  console.log(`resume ${session.id} in ${dir} (${terminal})`);
-  return json({ ok: true, terminal });
+  console.log(`${fork ? "fork" : "resume"} ${session.id} in ${dir} (${terminal})`);
+  return json({ ok: true, terminal, fork });
+}
+
+// -- Summary (for widgets, e.g. a Glance custom-api panel) --
+
+// API-equivalent $/1M tokens by model family/version. Cache read ≈ 0.1× input,
+// cache write ≈ 1.25× input (5-minute TTL). Mirrors the web UI's table.
+function resolveRate(modelId: string): { in: number; out: number } | null {
+  const m = modelId.toLowerCase().match(/(opus|sonnet|haiku|fable)[-\s]?(\d+)(?:[.-](\d+))?/);
+  if (!m) return null;
+  const ver = parseFloat(`${m[2]}.${m[3] ?? "0"}`);
+  switch (m[1]) {
+    case "fable": return { in: 10, out: 50 };
+    case "opus": return ver >= 4.5 ? { in: 5, out: 25 } : { in: 15, out: 75 };
+    case "sonnet": return { in: 3, out: 15 };
+    case "haiku": return ver >= 4.5 ? { in: 1, out: 5 } : { in: 0.8, out: 4 };
+    default: return null;
+  }
+}
+
+const FALLBACK_RATE = { in: 5, out: 25 }; // Opus 4.8, for sessions without model data
+
+function usageCost(tk: TokenUsage, rate: { in: number; out: number }): number {
+  return ((tk.input ?? 0) * rate.in + (tk.output ?? 0) * rate.out
+    + (tk.cache_read ?? 0) * 0.1 * rate.in + (tk.cache_write ?? 0) * 1.25 * rate.in) / 1e6;
+}
+
+function sessionCost(s: StoredSession): number {
+  const models = Object.entries(s.models ?? {});
+  if (models.length > 0) {
+    return models.reduce((sum, [id, tk]) => sum + usageCost(tk, resolveRate(id) ?? FALLBACK_RATE), 0);
+  }
+  return s.tokens ? usageCost(s.tokens, FALLBACK_RATE) : 0;
+}
+
+async function handleSummary(): Promise<Response> {
+  const sessions = (await mergedSessions()).filter(s => !s.meta?.deleted);
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const weekStart = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const bucket = () => ({ sessions: 0, cost: 0, tokens_out: 0 });
+  const today = bucket(), week = bucket();
+  let last: StoredSession | null = null;
+  let lastTs = 0;
+
+  for (const s of sessions) {
+    const ts = Date.parse((s.updated_at ?? s.started_at ?? "").replace(" ", "T") + "Z");
+    if (isNaN(ts)) continue;
+    const cost = sessionCost(s);
+    const out = s.tokens?.output ?? 0;
+    if (ts >= todayStart) { today.sessions++; today.cost += cost; today.tokens_out += out; }
+    if (ts >= weekStart) { week.sessions++; week.cost += cost; week.tokens_out += out; }
+    if (ts > lastTs) { lastTs = ts; last = s; }
+  }
+  const round = (b: ReturnType<typeof bucket>) => ({ ...b, cost: Math.round(b.cost * 100) / 100 });
+
+  return json({
+    host: MACHINE,
+    generated_at: now.toISOString(),
+    today: round(today),
+    week: round(week),
+    last_session: last ? {
+      title: last.meta?.title ?? last.title ?? "",
+      project: last.project ?? "",
+      host: last.host ?? "",
+      updated_at: last.updated_at ?? "",
+      ago_minutes: Math.max(0, Math.round((now.getTime() - lastTs) / 60000)),
+    } : null,
+  });
 }
 
 // When running from the repo (before the hook ever provisioned BASE_DIR),
@@ -376,6 +458,9 @@ Bun.serve({
     }
     if (url.pathname === "/api/sessions" && req.method === "GET") {
       return json(await mergedSessions());
+    }
+    if (url.pathname === "/api/summary" && req.method === "GET") {
+      return handleSummary();
     }
     if (url.pathname === "/api/meta" && req.method === "POST") {
       return handleMetaUpdate(req);

@@ -70,6 +70,12 @@ export interface TokenUsage {
   cache_read: number;   // cache_read_input_tokens (cache hits)
 }
 
+export interface UsageBreakdown {
+  totals: TokenUsage;
+  /** Per-model usage, keyed by the raw model id from the transcript. */
+  models: Record<string, TokenUsage>;
+}
+
 export interface AccountInfo {
   uuid: string;
   email: string;
@@ -93,6 +99,7 @@ export interface Session {
   analysis_count: number;
   summaries: string[];
   tokens: TokenUsage;
+  models: Record<string, TokenUsage>;
   account: AccountInfo | null;
   host: string;
 }
@@ -128,6 +135,7 @@ interface TranscriptEntry {
   message?: {
     id?: string;
     role?: string;
+    model?: string;
     content?: string | ContentBlock[];
     usage?: Usage;
   };
@@ -149,6 +157,7 @@ export function parseSessionsJs(text: string): Session[] {
       }
       if (!s.summaries) s.summaries = [];
       if (!s.tokens) s.tokens = { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+      if (!s.models) s.models = {};
       if (s.account === undefined) s.account = null;
       if (!s.host) s.host = "";
     }
@@ -266,11 +275,12 @@ export async function countUserMessages(transcriptPath: string): Promise<number>
   return count;
 }
 
-export async function computeTokenUsage(transcriptPath: string): Promise<TokenUsage> {
+export async function computeTokenUsage(transcriptPath: string): Promise<UsageBreakdown> {
   const totals: TokenUsage = { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+  const models: Record<string, TokenUsage> = {};
   // Streamed multi-block turns repeat the same message id across several lines,
   // and output_tokens can grow between them; keep the LAST (final) usage per id.
-  const byId = new Map<string, Usage>();
+  const byId = new Map<string, { usage: Usage; model: string }>();
   try {
     const text = await Bun.file(transcriptPath).text();
     for (const line of text.split("\n")) {
@@ -284,25 +294,32 @@ export async function computeTokenUsage(transcriptPath: string): Promise<TokenUs
       const usage = entry.message?.usage;
       if (!usage) continue;
 
+      const model = entry.message?.model ?? "";
       const id = entry.message?.id;
       if (id) {
-        byId.set(id, usage);
+        byId.set(id, { usage, model });
         continue;
       }
-      addUsage(totals, usage);
+      addUsage(totals, models, usage, model);
     }
-    for (const usage of byId.values()) addUsage(totals, usage);
+    for (const { usage, model } of byId.values()) addUsage(totals, models, usage, model);
   } catch {
     // File not found or permission error
   }
-  return totals;
+  return { totals, models };
 }
 
-function addUsage(totals: TokenUsage, usage: Usage): void {
-  totals.input += usage.input_tokens ?? 0;
-  totals.output += usage.output_tokens ?? 0;
-  totals.cache_write += usage.cache_creation_input_tokens ?? 0;
-  totals.cache_read += usage.cache_read_input_tokens ?? 0;
+function addUsage(totals: TokenUsage, models: Record<string, TokenUsage>, usage: Usage, model: string): void {
+  const add = (t: TokenUsage) => {
+    t.input += usage.input_tokens ?? 0;
+    t.output += usage.output_tokens ?? 0;
+    t.cache_write += usage.cache_creation_input_tokens ?? 0;
+    t.cache_read += usage.cache_read_input_tokens ?? 0;
+  };
+  add(totals);
+  // "<synthetic>" entries are error placeholders, not billable model output
+  if (!model || model === "<synthetic>") return;
+  add(models[model] ??= { input: 0, output: 0, cache_write: 0, cache_read: 0 });
 }
 
 export async function buildConversationText(
@@ -648,7 +665,7 @@ async function main(): Promise<void> {
   if (!(await Bun.file(transcriptPath).exists())) process.exit(0);
 
   const msgCount = await countUserMessages(transcriptPath);
-  const tokens = await computeTokenUsage(transcriptPath);
+  const usage = await computeTokenUsage(transcriptPath);
   const sessions = await loadSessions();
 
   // Cleanup stale sessions (handles terminal close / Ctrl+C / crash)
@@ -773,7 +790,8 @@ async function main(): Promise<void> {
     last_analyzed_at: msgCount,
     analysis_count: analysisCount,
     summaries: updatedSummaries,
-    tokens,
+    tokens: usage.totals,
+    models: usage.models,
     account: freshExisting?.account ?? account,
     host: HOST,
   };

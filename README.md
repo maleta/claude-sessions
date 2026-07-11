@@ -9,13 +9,15 @@ Automatically tracks and summarizes Claude Code sessions using Claude Haiku. Pro
 - **Automatic tracking** - Hooks fire on every response and session end
 - **AI summaries** - Claude Haiku generates title, summary, topics, and status
 - **Per-project summaries** - `SESSION_SUMMARIES.md` in each project directory for future session context
-- **Web UI** - Search, filter, hide/restore sessions grouped by project
+- **Web UI** - Sidebar facets (project, machine, account, status), a single sortable feed (recency, cost, tokens, duration), comfortable/compact density, and search with operators (`host:`, `status:`, `project:`, `model:`, `account:`, `branch:`, `before:`/`after:`)
+- **Cost & model per session** - The hook records token usage per model, so every card shows what that session would have cost on the API, which model ran it, exact start/last-activity timestamps and duration
 - **Multi-account aware** - Each session is stamped with the account/subscription it ran under (email + plan); filter sessions by account in the UI
 - **Resume commands** - One-click copy of `claude --resume <id>` commands
-- **Click-to-resume** - With the optional local server, clicking a session card opens a new terminal already resuming that session
-- **Backfill** - One command imports your whole pre-existing transcript history into the tracker
+- **Click-to-resume & fork** - With the optional local server, the ▶ resume button opens a new terminal already resuming that session; ⑂ fork resumes it as a new branched session (`--fork-session`) leaving the original untouched
+- **Backfill** - One command imports your whole pre-existing transcript history into the tracker (`--update-tokens` re-stamps per-model usage on sessions imported before model tracking)
 - **Editing** - Fix Haiku's titles/summaries, add your own searchable notes, pin, archive or delete sessions from the UI (synced across machines, never lost to re-analysis)
-- **Usage dashboard** - Activity heatmap, tokens per day by machine, top projects, and an API-equivalent cost estimate (pick the model rates), with range filters and a table view
+- **Usage dashboard** - Activity heatmap, tokens per day by machine, per-model and top-project rankings, and an API-equivalent cost that uses exact per-model rates where available, with range filters and a table view
+- **Summary endpoint** - `GET /api/summary` serves today/this-week aggregates (sessions, cost, tokens) for widgets like a Glance custom-api panel
 - **Session history skill** - Claude can read past session context via the plugin skill
 
 ## Requirements
@@ -58,7 +60,7 @@ Static HTML file - no server needed, opens directly in the browser:
 open ~/.claude/session-tracker/index.html
 ```
 
-The web UI is auto-provisioned by the hook on first run. Features: search, project grouping, status badges, hide/restore, copy resume commands.
+The web UI is auto-provisioned by the hook on first run. Layout: a sidebar of facet filters (projects with counts, machines, accounts, statuses, archived/deleted toggles) next to a single session feed. The feed sorts by last activity, cost, tokens or duration, and has a comfortable/compact density toggle (both persisted per browser). Each card shows the session's API-equivalent cost and total tokens, the model(s) that ran it, exact start and last-activity timestamps (local time, relative time alongside), duration, branch, message count, machine/account chips, summary, topics and your note. The search box combines free text with operators: `host:windpad status:debugging model:opus before:2026-07-01 broker`. Clicking a card opens the detail view; resume/fork are explicit buttons, so nothing launches by accident.
 
 ### Click-to-resume (optional local server)
 
@@ -69,7 +71,7 @@ bun ~/.claude/session-tracker/serve.ts
 # then open http://127.0.0.1:4457
 ```
 
-Clicking a card opens a new terminal window (Windows Terminal/cmd, Terminal.app, or gnome-terminal/konsole/xterm) already running `claude --resume <id>` in that session's project directory. The server binds to `127.0.0.1` only, and `/api/resume` only accepts session ids present in your own tracked data (the working directory always comes from the stored session, never from the request). Override the port with `SESSION_TRACKER_PORT`.
+The **▶ resume** button on a card opens a new terminal window (Windows Terminal/cmd, Terminal.app, or gnome-terminal/konsole/xterm) already running `claude --resume <id>` in that session's project directory. The **⑂ fork** button does the same with `--fork-session`: the conversation resumes as a NEW session id, so you can pick an old session's context back up without contaminating the original. The server binds to `127.0.0.1` only, and `/api/resume` only accepts session ids present in your own tracked data (the working directory always comes from the stored session, never from the request). Override the port with `SESSION_TRACKER_PORT`.
 
 `serve.ts` is auto-provisioned to `~/.claude/session-tracker/` by the hook, same as the UI. Opening `index.html` directly (file://) keeps working - you just get copy-only buttons instead of click-to-resume.
 
@@ -97,7 +99,8 @@ API endpoints:
 | `/` , `/index.html` | GET | Web UI (falls back to the repo copy if the data dir has none) |
 | `/sessions-data.js` | GET | Session data consumed by the UI |
 | `/api/config` | GET | `{ "resume": bool }` - feature discovery for the UI |
-| `/api/resume` | POST | `{ "id": "<session-id>" }` - opens a terminal resuming that session |
+| `/api/resume` | POST | `{ "id": "<session-id>", "fork": bool }` - opens a terminal resuming (or forking) that session |
+| `/api/summary` | GET | Today/this-week aggregates (sessions, API-equivalent cost, output tokens) + last session - for widgets (e.g. a [Glance](https://github.com/glanceapp/glance) custom-api panel) |
 
 `/api/resume` safety model: localhost bind by default, a required custom header (`x-session-tracker: 1`) forces a CORS preflight so web pages on other origins can't trigger it, the session id must match the tracked data (400 on malformed, 404 on unknown), and the working directory comes from the stored session - never from the request. Terminal launchers per platform: `wt`/`cmd` on Windows (Windows Terminal is an app-execution alias that Bun can neither stat nor spawn, so it's detected with `where.exe` and launched through `cmd /c start`), `Terminal.app` via osascript on macOS, `x-terminal-emulator`/`gnome-terminal`/`konsole`/`xterm` on Linux.
 
@@ -115,21 +118,23 @@ The UI auto-refreshes every minute in server mode, so edits and new sessions fro
 
 ### Usage dashboard
 
-The **📊 stats** button opens a usage dashboard over the same data: a KPI row (sessions, tokens generated, cache read, API-equivalent value), a GitHub-style activity heatmap, tokens-per-day stacked by machine, a top-projects ranking, and a per-project table. A range filter (7/30/90 days or all) scopes everything, and the **$ as** selector picks which model's API rates the cost estimate uses.
+The **📊 stats** button opens a usage dashboard over the same data: a KPI row (sessions, tokens generated, cache read, API-equivalent value), a GitHub-style activity heatmap, tokens-per-day stacked by machine, a by-model ranking, a top-projects ranking, and a per-project table. A range filter (7/30/90 days or all) scopes everything. The main UI's header shows the same idea at a glance: sessions today, $ today and $ last 7 days.
 
-The cost figure is an *equivalent value*, not a bill: sessions don't record which model each turn ran on, so the dashboard applies one model's published API rates (input, output, cache read ≈0.1× input, cache write ≈1.25× input at 5-minute TTL) to the accumulated token counts. For subscription users it reads as "what this usage would have cost on the API". Deleted sessions are excluded; archived ones count.
+The cost figure is an *equivalent value*, not a bill - published API rates (input, output, cache read ≈0.1× input, cache write ≈1.25× input at 5-minute TTL) applied to the token counts. Sessions carry a per-model token breakdown (`models`), so each model is priced at its own rate. Sessions tracked before model recording (or whose transcripts live on another machine) fall back to the **fallback $** selector's rates and are marked as estimated (`~` on cards, "(assumed)" in the by-model chart); run `bun scripts/backfill.ts --update-tokens` on the machine that owns them to stamp exact data. For subscription users it reads as "what this usage would have cost on the API". Deleted sessions are excluded; archived ones count.
 
 ### Backfill your history
 
 The tracker only records sessions from the moment it's installed. To import everything you did before, run (from the plugin directory):
 
 ```bash
-bun scripts/backfill.ts [--dry-run] [--limit N] [--concurrency N] [--exclude <regex>] [--account <email[:plan]>]
+bun scripts/backfill.ts [--dry-run] [--limit N] [--concurrency N] [--exclude <regex>] [--account <email[:plan]>] [--update-tokens]
 ```
 
 It scans `~/.claude/projects/**/*.jsonl`, skips sessions already tracked and empty transcripts, extracts metadata (project, branch, dates, tokens) straight from each transcript and asks Haiku for the title/summary/topics - the same analysis the live hook does. Progress is saved after every session, so it's safe to interrupt and re-run. Use `--exclude` to leave out transcripts whose path matches a regex (e.g. throwaway test-harness dirs); exclusions are counted and reported.
 
 Backfilled sessions have no account info by default (transcripts don't record it), but if you know which subscription a machine or an era of history was used with, `--account "old@example.com:Pro"` stamps it on everything imported by that run - so old-account sessions get their own filter chip. Unlike the live hook, the backfill never writes `SESSION_SUMMARIES.md` into your project directories.
+
+`--update-tokens` is a separate maintenance mode: it recomputes `tokens` AND the per-model breakdown (`models`) for sessions **already tracked** on this machine, straight from the transcripts - no Haiku calls, titles/summaries untouched. Run it once after upgrading to get exact per-model costs on your existing history.
 
 ### Multiple machines
 
@@ -205,6 +210,7 @@ Each entry in `sessions-data.js` is a JSON object:
 | `title` / `summary` / `topics` / `status` | Haiku analysis (`status`: completed, in-progress, exploring, debugging) |
 | `messages` | Count of real user messages (tool results excluded) |
 | `tokens` | `{ input, output, cache_write, cache_read }` accumulated from the transcript |
+| `models` | Same shape keyed by raw model id (e.g. `claude-opus-4-8`) - per-model usage for exact cost; `{}` on pre-feature data until `--update-tokens` runs |
 | `resume` | Ready-to-paste `claude --resume <id>` command |
 | `account` | `{ uuid, email, plan }` of the subscription the session ran under, or `null` if unknown (pre-feature or backfilled) |
 | `last_analyzed_at` / `analysis_count` / `summaries` | Incremental-analysis bookkeeping used by the hook |

@@ -1,5 +1,64 @@
 # Changelog
 
+## [1.2.0] - 2026-07-11
+
+### Per-model token tracking & session cost
+
+`computeTokenUsage` now also splits usage by the raw model id found on each
+assistant transcript line (`message.model`, `<synthetic>` error entries excluded),
+stored as `models: { "<model-id>": { input, output, cache_write, cache_read } }`
+next to the existing totals. Both the live hook and the backfill stamp it, and
+`bun scripts/backfill.ts --update-tokens` re-stamps tokens + models on already
+tracked sessions straight from the transcripts (no Haiku calls) so existing
+history gets exact data.
+
+Cost model shared by UI and server: family/version rates resolved from the model
+id (Fable 5, Opus ≥4.5 vs older, Sonnet, Haiku ≥4.5 vs older; cache read 0.1×
+input, cache write 1.25× input). Sessions without `models` fall back to a
+selectable rate and are marked estimated (`~` on cards, "(assumed)" in charts).
+
+### Web UI redesign
+
+Full rewrite of the layout on a refreshed dark palette (Claude-coral accent for
+primary actions and annotations, semantic status colors kept separate), larger
+type throughout:
+
+- **Sidebar facets** replace the 500px project columns and the three filter-chip
+  rows: projects with counts (top 12 + expand), machines, accounts, statuses,
+  archived/deleted toggles. One vertical feed instead of horizontal scrolling;
+  cards carry a project chip (click = filter).
+- **Cards** now answer "when, how much, with what": API-equivalent cost + total
+  tokens top-right (per-model breakdown in the tooltip/detail), model chip,
+  duration, exact start/last timestamps in local time with relative time
+  alongside, plus the existing status/branch/msgs/machine/account meta.
+- **Explicit actions**: clicking a card opens details (it no longer launches a
+  terminal); ▶ resume is the primary button and ⑂ fork resumes with
+  `--fork-session` (new session id, original untouched). `/api/resume` accepts
+  `{ fork: true }`.
+- **Search operators**: free text combines with `host:`, `status:`, `project:`,
+  `model:`, `account:`, `branch:`, `before:`/`after:` (dates, YYYY-MM-DD).
+- **Sort & density**: feed sorts by last activity / cost / tokens / duration;
+  comfortable/compact density. Both persisted in localStorage.
+- **Header KPIs**: sessions today, $ today, $ last 7 days.
+- **Detail modal**: exact timestamps, duration, per-model cost breakdown with
+  estimated-data note, and Resume/Fork buttons.
+
+### Usage dashboard redesign
+
+Same visual system as the main UI, bigger legible type. Costs everywhere now use
+the exact per-model data where available ("$ as" became "fallback $", applied
+only to sessions without a breakdown; the KPI notes how many were estimated).
+New **By model** ranking (output tokens + cost per model). Heatmap/daily-bars
+tooltips gained a ≈value line; top-projects bars and the table show per-project
+cost computed per-session.
+
+### Summary endpoint
+
+`GET /api/summary`: `{ host, today: { sessions, cost, tokens_out }, week: {...},
+last_session: { title, project, host, updated_at, ago_minutes } }` over the
+merged multi-machine data (deleted excluded) - made for personal-dashboard
+widgets (e.g. a Glance custom-api panel).
+
 ## [1.1.0] - 2026-07-11
 
 Three features built on top of upstream 1.0.3, developed and tested end-to-end on
