@@ -12,10 +12,16 @@
  * an account (transcripts don't record it; they show as "untracked account").
  *
  * Usage:
- *   bun scripts/backfill.ts [--dry-run] [--limit N] [--concurrency N] [--exclude <regex>]
+ *   bun scripts/backfill.ts [--dry-run] [--limit N] [--concurrency N]
+ *                           [--exclude <regex>] [--account <email[:plan]>]
  *
  * --exclude matches against the transcript path (e.g. --exclude "ab-runs"
  * to leave out test-harness working dirs). Excluded counts are reported.
+ *
+ * --account stamps every session imported by THIS run with the given
+ * account (transcripts don't record it, but you often know which
+ * subscription a machine or an era of history was used with), e.g.
+ * --account "old@example.com:Pro". Omit for account: null (untracked).
  *
  * Respects CLAUDE_CONFIG_DIR (transcripts) and SESSION_TRACKER_DIR (output).
  * Safe to interrupt and re-run: progress is saved after every session.
@@ -42,11 +48,22 @@ const DRY_RUN = process.argv.includes("--dry-run");
 const LIMIT = intFlag("--limit", Infinity);
 const CONCURRENCY = intFlag("--concurrency", 3);
 const EXCLUDE = strFlag("--exclude");
+const ACCOUNT = accountFlag("--account");
 
 function strFlag(name: string): RegExp | null {
   const i = process.argv.indexOf(name);
   if (i === -1 || !process.argv[i + 1]) return null;
   return new RegExp(process.argv[i + 1]);
+}
+
+function accountFlag(name: string): { uuid: string; email: string; plan: string } | null {
+  const i = process.argv.indexOf(name);
+  if (i === -1 || !process.argv[i + 1]) return null;
+  const value = process.argv[i + 1];
+  const sep = value.lastIndexOf(":");
+  const email = sep === -1 ? value : value.slice(0, sep);
+  const plan = sep === -1 ? "" : value.slice(sep + 1);
+  return { uuid: "", email, plan };
 }
 
 function intFlag(name: string, fallback: number): number {
@@ -139,7 +156,7 @@ async function backfillOne(path: string): Promise<Session | null> {
     analysis_count: 1,
     summaries: [],
     tokens,
-    account: null,
+    account: ACCOUNT,
     host: HOST,
   };
 }
@@ -159,6 +176,9 @@ async function main(): Promise<void> {
     (EXCLUDE ? ` | excluded by ${EXCLUDE}: ${excluded}` : "") +
     ` | to process: ${candidates.length}`
   );
+  if (ACCOUNT) {
+    console.log(`Stamping account on imported sessions: ${ACCOUNT.email}${ACCOUNT.plan ? ` (${ACCOUNT.plan})` : ""}`);
+  }
 
   if (DRY_RUN) {
     for (const p of candidates) {

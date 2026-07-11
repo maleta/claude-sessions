@@ -104,12 +104,12 @@ API endpoints:
 The tracker only records sessions from the moment it's installed. To import everything you did before, run (from the plugin directory):
 
 ```bash
-bun scripts/backfill.ts [--dry-run] [--limit N] [--concurrency N] [--exclude <regex>]
+bun scripts/backfill.ts [--dry-run] [--limit N] [--concurrency N] [--exclude <regex>] [--account <email[:plan]>]
 ```
 
 It scans `~/.claude/projects/**/*.jsonl`, skips sessions already tracked and empty transcripts, extracts metadata (project, branch, dates, tokens) straight from each transcript and asks Haiku for the title/summary/topics - the same analysis the live hook does. Progress is saved after every session, so it's safe to interrupt and re-run. Use `--exclude` to leave out transcripts whose path matches a regex (e.g. throwaway test-harness dirs); exclusions are counted and reported.
 
-Backfilled sessions have no account info (transcripts don't record it) and, unlike the live hook, the backfill never writes `SESSION_SUMMARIES.md` into your project directories.
+Backfilled sessions have no account info by default (transcripts don't record it), but if you know which subscription a machine or an era of history was used with, `--account "old@example.com:Pro"` stamps it on everything imported by that run - so old-account sessions get their own filter chip. Unlike the live hook, the backfill never writes `SESSION_SUMMARIES.md` into your project directories.
 
 ### Multiple accounts / subscriptions
 
