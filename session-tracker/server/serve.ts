@@ -51,6 +51,10 @@ interface StoredSession {
   project?: string;
   project_path?: string;
   title?: string;
+  summary?: string;
+  status?: string;
+  branch?: string;
+  messages?: number;
   started_at?: string;
   updated_at?: string;
   tokens?: TokenUsage;
@@ -223,6 +227,28 @@ function isDirectory(path: string): boolean {
 
 // -- Terminal launchers --
 
+/**
+ * Optional terminal preferences, read from <data dir>/terminal.json:
+ *   { "wtProfile": "PowerShell", "shell": "pwsh", "linux": "konsole" }
+ * - wtProfile: Windows Terminal profile name (wt -p <profile>)
+ * - shell: what runs the resume command on Windows: "cmd" (default) or "pwsh"
+ * - linux: preferred launcher (x-terminal-emulator|gnome-terminal|konsole|xterm)
+ */
+interface TerminalConfig {
+  wtProfile?: string;
+  shell?: string;
+  linux?: string;
+}
+
+async function loadTerminalConfig(): Promise<TerminalConfig> {
+  try {
+    const cfg = await Bun.file(join(BASE_DIR, "terminal.json")).json();
+    return cfg && typeof cfg === "object" ? cfg : {};
+  } catch {
+    return {};
+  }
+}
+
 function shQuote(s: string): string {
   return "'" + s.replace(/'/g, "'\\''") + "'";
 }
@@ -252,15 +278,19 @@ function hasWindowsTerminal(): boolean {
 }
 
 /** Opens a new terminal window running `claude --resume <id>` in `dir`. */
-function launchTerminal(sessionId: string, dir: string, fork = false): string | null {
+function launchTerminal(sessionId: string, dir: string, fork = false, cfg: TerminalConfig = {}): string | null {
   const resume = `claude --resume ${sessionId}${fork ? " --fork-session" : ""}`;
 
   if (process.platform === "win32") {
-    if (hasWindowsTerminal() && trySpawn(["cmd", "/c", "start", "", "wt", "-w", "-1", "nt", "-d", dir, "cmd", "/k", resume])) {
-      return "Windows Terminal";
+    const inner = cfg.shell === "pwsh"
+      ? ["pwsh", "-NoExit", "-Command", resume]
+      : ["cmd", "/k", resume];
+    const profile = cfg.wtProfile ? ["-p", cfg.wtProfile] : [];
+    if (hasWindowsTerminal() && trySpawn(["cmd", "/c", "start", "", "wt", "-w", "-1", "nt", ...profile, "-d", dir, ...inner])) {
+      return cfg.wtProfile ? `Windows Terminal (${cfg.wtProfile})` : "Windows Terminal";
     }
-    if (trySpawn(["cmd", "/c", "start", "ClaudeSession", "/D", dir, "cmd", "/k", resume])) {
-      return "cmd";
+    if (trySpawn(["cmd", "/c", "start", "ClaudeSession", "/D", dir, ...inner])) {
+      return cfg.shell === "pwsh" ? "pwsh" : "cmd";
     }
     return null;
   }
@@ -286,6 +316,8 @@ function launchTerminal(sessionId: string, dir: string, fork = false): string | 
     ["konsole", ["konsole", "--workdir", dir, "-e", "bash", "-lc", `${resume}; exec bash`]],
     ["xterm", ["xterm", "-e", "bash", "-lc", inner]],
   ];
+  // Preferred launcher first, if configured
+  if (cfg.linux) candidates.sort((a, b) => (b[0] === cfg.linux ? 1 : 0) - (a[0] === cfg.linux ? 1 : 0));
   for (const [name, cmd] of candidates) {
     if (trySpawn(cmd)) return name;
   }
@@ -341,7 +373,7 @@ async function handleResume(req: Request): Promise<Response> {
     ? session.project_path
     : homedir();
 
-  const terminal = launchTerminal(session.id, dir, fork);
+  const terminal = launchTerminal(session.id, dir, fork, await loadTerminalConfig());
   if (!terminal) {
     return json({ error: "no supported terminal emulator found" }, 500);
   }
@@ -417,6 +449,223 @@ async function handleSummary(): Promise<Response> {
   });
 }
 
+// -- Transcript viewer --
+
+const CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
+const PROJECTS_DIR = join(CONFIG_DIR, "projects");
+
+/** Locate a session transcript on THIS machine (projects dirs are per-cwd). */
+function findTranscript(id: string): string | null {
+  let projects: string[] = [];
+  try { projects = readdirSync(PROJECTS_DIR); } catch { return null; }
+  for (const proj of projects) {
+    const p = join(PROJECTS_DIR, proj, `${id}.jsonl`);
+    try { if (statSync(p).isFile()) return p; } catch { /* keep looking */ }
+  }
+  return null;
+}
+
+interface TranscriptMessage {
+  role: string;
+  ts: string;
+  text: string;
+  tools: string[];
+  model?: string;
+}
+
+/** One-line human label for a tool_use block. */
+function toolLabel(block: Record<string, unknown>): string {
+  const name = String(block.name ?? "tool");
+  const input = (block.input ?? {}) as Record<string, unknown>;
+  const hint = String(input.description ?? input.command ?? input.file_path ?? input.pattern ?? input.url ?? input.prompt ?? "");
+  const clean = hint.replace(/\s+/g, " ").trim();
+  return clean ? `${name}: ${clean.slice(0, 160)}` : name;
+}
+
+/**
+ * Parse a transcript into displayable messages: user text, assistant text and
+ * tool calls. Tool RESULTS are skipped (they dominate transcript size and are
+ * rarely what you're searching for). Consecutive lines of the same streamed
+ * assistant message are merged into one entry.
+ */
+async function parseTranscript(path: string): Promise<TranscriptMessage[]> {
+  const messages: TranscriptMessage[] = [];
+  let lastAssistantId = "";
+  const text = await Bun.file(path).text();
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let entry: Record<string, unknown>;
+    try { entry = JSON.parse(trimmed); } catch { continue; }
+    if (entry.type !== "user" && entry.type !== "assistant") continue;
+    const message = (entry.message ?? {}) as Record<string, unknown>;
+    const content = message.content;
+    const ts = typeof entry.timestamp === "string" ? entry.timestamp : "";
+
+    if (entry.type === "user") {
+      lastAssistantId = "";
+      let userText = "";
+      if (typeof content === "string") {
+        userText = content;
+      } else if (Array.isArray(content)) {
+        userText = content
+          .filter(b => b && b.type === "text" && typeof b.text === "string")
+          .map(b => b.text)
+          .join("\n");
+      }
+      if (userText.trim()) {
+        messages.push({ role: "user", ts, text: userText, tools: [] });
+      }
+      continue;
+    }
+
+    // assistant: text blocks + tool_use labels, merged per streamed message id
+    const blocks = Array.isArray(content) ? content : [];
+    const textParts: string[] = [];
+    const tools: string[] = [];
+    for (const b of blocks) {
+      if (!b || typeof b !== "object") continue;
+      if (b.type === "text" && typeof b.text === "string" && b.text.trim()) textParts.push(b.text);
+      if (b.type === "tool_use") tools.push(toolLabel(b as Record<string, unknown>));
+    }
+    if (textParts.length === 0 && tools.length === 0) continue;
+    const id = String(message.id ?? "");
+    const model = typeof message.model === "string" && message.model !== "<synthetic>" ? message.model : undefined;
+    const prev = messages[messages.length - 1];
+    if (id && id === lastAssistantId && prev && prev.role === "assistant") {
+      if (textParts.length) prev.text += (prev.text ? "\n" : "") + textParts.join("\n");
+      prev.tools.push(...tools);
+    } else {
+      messages.push({ role: "assistant", ts, text: textParts.join("\n"), tools, model });
+      lastAssistantId = id;
+    }
+  }
+  return messages;
+}
+
+async function handleTranscript(url: URL): Promise<Response> {
+  const id = url.searchParams.get("id") ?? "";
+  if (!/^[0-9a-zA-Z-]{8,64}$/.test(id)) {
+    return json({ error: "invalid session id" }, 400);
+  }
+  // Same whitelist as resume: only sessions we track.
+  const sessions = await loadSessions();
+  if (!sessions.some(s => s.id === id)) {
+    return json({ error: "unknown session id" }, 404);
+  }
+  const path = findTranscript(id);
+  if (!path) {
+    return json({ error: "transcript not found on this machine" }, 404);
+  }
+  try {
+    const messages = await parseTranscript(path);
+    return json({ id, count: messages.length, messages });
+  } catch (e) {
+    return json({ error: `failed to read transcript: ${e}` }, 500);
+  }
+}
+
+// -- Markdown report ("what did I do this week") --
+
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function fmtDay(dateStr: string): string {
+  const ts = Date.parse((dateStr || "").replace(" ", "T") + "Z");
+  if (isNaN(ts)) return dateStr || "?";
+  const d = new Date(ts);
+  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function fmtTok(n: number): string {
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+  return String(n);
+}
+
+function fmtMoney(v: number): string {
+  if (v >= 100) return "$" + Math.round(v).toLocaleString("en-US");
+  return "$" + v.toFixed(2);
+}
+
+function fmtDur(startStr: string, endStr: string): string {
+  const a = Date.parse((startStr || "").replace(" ", "T") + "Z");
+  const b = Date.parse((endStr || "").replace(" ", "T") + "Z");
+  if (isNaN(a) || isNaN(b) || b <= a) return "";
+  const min = Math.round((b - a) / 60000);
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  if (h < 48) return `${h}h ${min % 60}m`;
+  return `${Math.floor(h / 24)}d ${h % 24}h`;
+}
+
+async function handleReport(url: URL): Promise<Response> {
+  const daysRaw = url.searchParams.get("days") ?? "7";
+  const days = daysRaw === "all" ? Infinity : Math.max(1, Number(daysRaw) || 7);
+  const sessions = (await mergedSessions()).filter(s => !s.meta?.deleted);
+  const cutoff = days === Infinity ? -Infinity : Date.now() - days * 24 * 60 * 60 * 1000;
+
+  interface ReportSession extends StoredSession { _ts: number; _cost: number }
+  const inRange: ReportSession[] = [];
+  for (const s of sessions) {
+    const ts = Date.parse((s.updated_at ?? s.started_at ?? "").replace(" ", "T") + "Z");
+    if (isNaN(ts) || ts < cutoff) continue;
+    inRange.push({ ...s, _ts: ts, _cost: sessionCost(s) });
+  }
+  inRange.sort((a, b) => b._ts - a._ts);
+
+  const byProject = new Map<string, ReportSession[]>();
+  for (const s of inRange) {
+    const key = s.project || s.project_path || "unknown";
+    if (!byProject.has(key)) byProject.set(key, []);
+    byProject.get(key)!.push(s);
+  }
+  const projects = Array.from(byProject.entries())
+    .map(([name, list]) => ({ name, list, cost: list.reduce((sum, s) => sum + s._cost, 0) }))
+    .sort((a, b) => b.cost - a.cost);
+
+  const totalCost = inRange.reduce((sum, s) => sum + s._cost, 0);
+  const totalOut = inRange.reduce((sum, s) => sum + (s.tokens?.output ?? 0), 0);
+  const rangeLabel = days === Infinity ? "all time" : days === 7 ? "last 7 days" : `last ${days} days`;
+
+  const lines: string[] = [];
+  lines.push(`# Claude Code sessions — ${rangeLabel}`);
+  lines.push("");
+  const now = new Date();
+  lines.push(`_Generated ${now.getDate()} ${MONTHS_SHORT[now.getMonth()]} ${now.getFullYear()} · ${inRange.length} sessions · ` +
+    `${fmtMoney(totalCost)} API-equivalent · ${fmtTok(totalOut)} tokens generated_`);
+  lines.push("");
+  for (const proj of projects) {
+    lines.push(`## ${proj.name} — ${proj.list.length} session${proj.list.length !== 1 ? "s" : ""} · ${fmtMoney(proj.cost)}`);
+    lines.push("");
+    for (const s of proj.list) {
+      const m = s.meta ?? {};
+      const title = m.title || s.title || "Untitled session";
+      const summary = m.summary || s.summary || "";
+      const status = m.status || s.status || "";
+      const dur = fmtDur(s.started_at ?? "", s.updated_at ?? "");
+      const startDay = fmtDay(s.started_at ?? "");
+      const endDay = fmtDay(s.updated_at ?? "");
+      const facts = [
+        status,
+        startDay + (endDay && endDay !== startDay ? ` → ${endDay}` : ""),
+        dur,
+        fmtMoney(s._cost),
+        s.branch && s.branch !== "n/a" ? `\`${s.branch}\`` : "",
+      ].filter(Boolean).join(" · ");
+      lines.push(`- **${title}** — ${facts}`);
+      if (summary) lines.push(`  ${summary}`);
+      if (m.note) lines.push(`  > ${String(m.note).replace(/\n/g, " ")}`);
+    }
+    lines.push("");
+  }
+  if (inRange.length === 0) lines.push("_No sessions in this range._");
+
+  return new Response(lines.join("\n") + "\n", {
+    headers: { "Content-Type": "text/markdown; charset=utf-8" },
+  });
+}
+
 // When running from the repo (before the hook ever provisioned BASE_DIR),
 // fall back to the checked-in web UI next to this script.
 const REPO_UI = join(import.meta.dir, "..", "web", "index.html");
@@ -461,6 +710,12 @@ Bun.serve({
     }
     if (url.pathname === "/api/summary" && req.method === "GET") {
       return handleSummary();
+    }
+    if (url.pathname === "/api/transcript" && req.method === "GET") {
+      return handleTranscript(url);
+    }
+    if (url.pathname === "/api/report" && req.method === "GET") {
+      return handleReport(url);
     }
     if (url.pathname === "/api/meta" && req.method === "POST") {
       return handleMetaUpdate(req);

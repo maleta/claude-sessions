@@ -57,7 +57,39 @@ cost computed per-session.
 `GET /api/summary`: `{ host, today: { sessions, cost, tokens_out }, week: {...},
 last_session: { title, project, host, updated_at, ago_minutes } }` over the
 merged multi-machine data (deleted excluded) - made for personal-dashboard
-widgets (e.g. a Glance custom-api panel).
+widgets. A ready-to-paste Glance custom-api widget is documented in the README.
+
+### Transcript viewer
+
+`GET /api/transcript?id=` parses the session's `.jsonl` on the serving machine
+(same id whitelist as resume) into user/assistant messages plus one-line labels
+for every tool call; tool results are skipped. The detail modal's 📜 Transcript
+button opens it in a full-screen reader with search (match highlighting, count,
+Enter/Shift+Enter prev-next jumps, "only matches" filter).
+
+### Table view, sorting and dates
+
+- **view: cards | table** toggle - the table is a dense, sortable-by-header
+  listing (started, last activity, title, project, model, status, msgs,
+  duration, tokens, cost); rows open the detail modal. Persisted per browser.
+- Sort gained `started` and `msgs` keys and an asc/desc direction toggle;
+  a **clear filters (n)** button appears whenever facets or search are active.
+- All exact timestamps now render as day-month-year (`11 Jul 2026, 12:40`),
+  local time.
+- Archiving a whole project from the sidebar now requires a second confirming
+  click (it was too easy to archive dozens of sessions by accident).
+
+### Markdown report
+
+`GET /api/report?days=7|30|90|all` renders a "what did I do" report: totals,
+then sessions grouped by project (status, dates, duration, cost, summary,
+notes). 📄 button in the usage dashboard opens the current range's report.
+
+### Terminal profiles
+
+Optional `<data dir>/terminal.json`: `wtProfile` (Windows Terminal profile for
+`wt -p`), `shell` (`cmd` | `pwsh` on Windows), `linux` (preferred launcher).
+Applies to resume and fork.
 
 ## [1.1.0] - 2026-07-11
 

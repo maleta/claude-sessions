@@ -390,6 +390,149 @@
     padding: 60px 0;
     font-size: 1rem;
   }
+  .tool-chip.clearchip { border-color: var(--accent); color: var(--accent); }
+  .tool-chip.clearchip:hover { background: var(--accent-soft); color: var(--text); }
+
+  /* ---------- table view ---------- */
+  .table-wrap {
+    overflow-x: auto;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+  }
+  .sessions-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+    white-space: nowrap;
+  }
+  .sessions-table th {
+    text-align: left;
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--faint);
+    font-weight: 500;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+  }
+  .sessions-table .th-btn {
+    background: none;
+    border: none;
+    color: var(--faint);
+    font: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+    padding: 0;
+  }
+  .sessions-table .th-btn:hover { color: var(--link); }
+  .sessions-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border-soft);
+    color: var(--muted);
+    vertical-align: middle;
+  }
+  .sessions-table tbody tr { cursor: pointer; }
+  .sessions-table tbody tr:hover td { background: var(--surface2); }
+  .sessions-table tbody tr:last-child td { border-bottom: none; }
+  .sessions-table td.mono { font-family: var(--mono); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+  .sessions-table td.mono .rel { color: var(--accent); }
+  .sessions-table td.num { text-align: right; font-family: var(--mono); font-size: 0.8rem; font-variant-numeric: tabular-nums; color: var(--text); }
+  .sessions-table td.td-title { color: var(--text); font-weight: 550; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .sessions-table td.td-proj { color: var(--link); font-size: 0.76rem; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+  .sessions-table tr.row-hidden td { opacity: 0.45; }
+  .sessions-table tr.row-deleted td { opacity: 0.45; color: var(--err); }
+
+  /* ---------- transcript viewer ---------- */
+  .tr-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 26;
+    display: none;
+    flex-direction: column;
+  }
+  .tr-overlay.open { display: flex; }
+  .tr-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border-soft);
+    flex-wrap: wrap;
+  }
+  .tr-head h2 {
+    font-size: 1.05rem;
+    flex: 1;
+    min-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tr-search {
+    width: 300px;
+    padding: 7px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 0.88rem;
+    font-family: var(--mono);
+    outline: none;
+  }
+  .tr-search:focus { border-color: var(--link); }
+  .tr-count { font-size: 0.8rem; color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tr-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px 60px;
+  }
+  .tr-list { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .tr-msg {
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    padding: 12px 16px;
+    background: var(--surface);
+  }
+  .tr-msg.user { border-left: 3px solid var(--accent); }
+  .tr-msg.assistant { border-left: 3px solid var(--border); }
+  .tr-msg.tr-hidden { display: none; }
+  .tr-role {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 0.7rem;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .tr-msg.user .tr-role { color: var(--accent); }
+  .tr-msg.assistant .tr-role { color: var(--muted); }
+  .tr-role .tr-ts { color: var(--faint); font-weight: 400; letter-spacing: 0; text-transform: none; font-family: var(--mono); font-size: 0.72rem; }
+  .tr-text {
+    font-size: 0.88rem;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.55;
+  }
+  .tr-text mark { background: rgba(224, 121, 90, 0.35); color: var(--text); border-radius: 2px; padding: 0 1px; }
+  .tr-text mark.cur { background: var(--accent); color: #14100e; }
+  .tr-tools { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
+  .tr-tool {
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    color: var(--faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tr-empty { text-align: center; color: var(--faint); padding: 60px 0; }
   .copied-toast {
     position: fixed;
     bottom: 24px;
@@ -720,17 +863,21 @@ function formatTokens(n) {
   return String(n);
 }
 
-// Timestamps are stored as UTC "YYYY-MM-DD HH:MM"; show them in local time.
+// Timestamps are stored as UTC "YYYY-MM-DD HH:MM"; show them in local time,
+// always as day month year ("11 Jul 2026, 12:40").
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function pad2(n) { return String(n).padStart(2, '0'); }
 function fmtExact(dateStr) {
   if (!dateStr) return '';
   const ts = Date.parse(dateStr.replace(' ', 'T') + 'Z');
   if (isNaN(ts)) return dateStr;
   const d = new Date(ts);
-  const opts = { day: 'numeric', month: 'short' };
-  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
-  const date = d.toLocaleDateString(undefined, opts);
-  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
-  return date + ', ' + time;
+  return d.getDate() + ' ' + MONTHS_SHORT[d.getMonth()] + ' ' + d.getFullYear() +
+    ', ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+function fmtExactDay(dateStr) {
+  const full = fmtExact(dateStr);
+  return full ? full.split(',')[0] : '';
 }
 
 function durationMinutes(startStr, endStr) {
@@ -1041,7 +1188,9 @@ const app = blok.mount('#app', {
     hostFilter: '__all__',
     statusFilter: '__all__',
     sortKey: prefs.sort || 'recent',
+    sortDir: prefs.dir || 'desc',
     density: prefs.density || 'comfortable',
+    viewMode: prefs.view || 'cards',
     canResume: !!cfg.resume,
     canEdit: canEdit,
     serverHost: cfg.host || '',
@@ -1099,22 +1248,32 @@ const app = blok.mount('#app', {
       void this.tick;
       const arr = [...this.filtered];
       const k = this.sortKey;
-      if (k === 'cost') arr.sort((a, b) => b._costNum - a._costNum);
-      else if (k === 'tokens') arr.sort((a, b) => b._tokTotal - a._tokTotal);
-      else if (k === 'duration') arr.sort((a, b) => b._durMin - a._durMin);
-      else arr.sort((a, b) =>
-        ((b._pinned ? 1 : 0) - (a._pinned ? 1 : 0)) ||
-        (b.updated_at || b.started_at).localeCompare(a.updated_at || a.started_at));
+      const dir = this.sortDir === 'asc' ? -1 : 1;
+      const cmps = {
+        recent: (a, b) => (b.updated_at || b.started_at).localeCompare(a.updated_at || a.started_at),
+        started: (a, b) => (b.started_at || '').localeCompare(a.started_at || ''),
+        cost: (a, b) => b._costNum - a._costNum,
+        tokens: (a, b) => b._tokTotal - a._tokTotal,
+        duration: (a, b) => b._durMin - a._durMin,
+        msgs: (a, b) => (b.messages || 0) - (a.messages || 0),
+      };
+      const cmp = cmps[k] || cmps.recent;
+      arr.sort((a, b) =>
+        (k === 'recent' ? ((b._pinned ? 1 : 0) - (a._pinned ? 1 : 0)) : 0) ||
+        dir * cmp(a, b));
       const hiddenIds = new Set(this.hiddenSessionIds);
       for (const s of arr) {
         s._isHidden = s._archived || (!this.canEdit && hiddenIds.has(s.id));
         s._startText = fmtExact(s.started_at);
-        s._endText = s._endPrefix ? fmtExact(s.updated_at) : '';
+        s._lastText = fmtExact(s.updated_at);
+        s._endText = s._endPrefix ? s._lastText : '';
         s._endRelText = ' · ' + relativeTime(s.updated_at);
         s._startRelText = relativeTime(s.started_at);
         s._endPrefixLabel = s._endPrefix + ' ';
         s._startTitle = s.started_at + ' UTC';
         s._endTitle = s.updated_at + ' UTC';
+        s._msgsText = String(s.messages || 0);
+        s._tokShort = formatTokens(s._tokTotal);
       }
       return arr;
     },
@@ -1198,16 +1357,59 @@ const app = blok.mount('#app', {
     sortOptions() {
       return [
         { key: 'recent', label: 'recent' },
+        { key: 'started', label: 'started' },
         { key: 'cost', label: 'cost' },
         { key: 'tokens', label: 'tokens' },
         { key: 'duration', label: 'duration' },
+        { key: 'msgs', label: 'msgs' },
       ].map(o => ({ ...o, active: o.key === this.sortKey }));
+    },
+    dirBtnText() {
+      return this.sortDir === 'asc' ? '↑ asc' : '↓ desc';
     },
     isCompact() {
       return this.density === 'compact';
     },
+    isTable() {
+      return this.viewMode === 'table';
+    },
     densityBtnText() {
       return this.density === 'compact' ? 'density: compact' : 'density: comfortable';
+    },
+    viewBtnText() {
+      return this.viewMode === 'table' ? 'view: table' : 'view: cards';
+    },
+    activeFilterCount() {
+      let n = 0;
+      if (this.projectFilter !== '__all__') n++;
+      if (this.accountFilter !== '__all__') n++;
+      if (this.hostFilter !== '__all__') n++;
+      if (this.statusFilter !== '__all__') n++;
+      if (this.search.trim()) n++;
+      return n;
+    },
+    clearFiltersText() {
+      return 'clear filters (' + this.activeFilterCount + ')';
+    },
+    tableHeaders() {
+      const arrow = this.sortDir === 'asc' ? ' ↑' : ' ↓';
+      return [
+        { key: 'started', label: 'started' },
+        { key: 'recent', label: 'last activity' },
+        { key: '', label: 'title' },
+        { key: '', label: 'project' },
+        { key: '', label: 'model' },
+        { key: '', label: 'status' },
+        { key: 'msgs', label: 'msgs' },
+        { key: 'duration', label: 'duration' },
+        { key: 'tokens', label: 'tokens' },
+        { key: 'cost', label: 'cost' },
+      ].map((h, i) => ({
+        ...h,
+        id: i + ':' + h.label,
+        text: h.label + (h.key && h.key === this.sortKey ? arrow : ''),
+        sortable: !!h.key,
+      }));
     },
     archivedCount() {
       if (this.canEdit) return this.sessions.filter(s => s._archived && !s._deleted).length;
@@ -1222,6 +1424,11 @@ const app = blok.mount('#app', {
     },
     detailOpen() {
       return !!this.detail;
+    },
+    detailIsLocal() {
+      const d = this.detail;
+      if (!d || !SERVER_MODE) return false;
+      return !d._host || !this.serverHost || d._host === this.serverHost;
     },
     detailStartText() {
       return this.detail ? fmtExact(this.detail.started_at) : '';
@@ -1290,13 +1497,47 @@ const app = blok.mount('#app', {
     setStatus(key) {
       this.statusFilter = this.statusFilter === key ? '__all__' : key;
     },
+    _savePrefs() {
+      savePrefs({ sort: this.sortKey, dir: this.sortDir, density: this.density, view: this.viewMode });
+    },
     setSort(key) {
       this.sortKey = key;
-      savePrefs({ sort: this.sortKey, density: this.density });
+      this._savePrefs();
+    },
+    sortBy(key) {
+      if (!key) return;
+      if (this.sortKey === key) {
+        this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.sortKey = key;
+        this.sortDir = 'desc';
+      }
+      this._savePrefs();
+    },
+    toggleDir() {
+      this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+      this._savePrefs();
     },
     toggleDensity() {
       this.density = this.density === 'compact' ? 'comfortable' : 'compact';
-      savePrefs({ sort: this.sortKey, density: this.density });
+      this._savePrefs();
+    },
+    toggleView() {
+      this.viewMode = this.viewMode === 'table' ? 'cards' : 'table';
+      this._savePrefs();
+    },
+    clearFilters() {
+      this.projectFilter = '__all__';
+      this.accountFilter = '__all__';
+      this.hostFilter = '__all__';
+      this.statusFilter = '__all__';
+      this.searchInput = '';
+      this.search = '';
+    },
+    openTranscript() {
+      const s = this.detail;
+      if (!s || !window.__openTranscript) return;
+      window.__openTranscript(s.id, s.title);
     },
     setEditStatus(key) { this.editStatus = key; },
     noop() { /* click.stop anchor for the modal panel */ },
@@ -1348,6 +1589,17 @@ const app = blok.mount('#app', {
       saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
     },
     async archiveProject(key) {
+      // Two-step confirm: archiving a whole project is easy to hit by accident
+      const now = Date.now();
+      if (this._pendingArchiveProject !== key || now - (this._pendingArchiveTs || 0) > 4000) {
+        this._pendingArchiveProject = key;
+        this._pendingArchiveTs = now;
+        const n = this.sessions.filter(s => !s._deleted && !s._archived &&
+          (s.project || s.project_path || 'unknown') === key).length;
+        this._toast('Click ✕ again to archive ' + n + ' sessions in "' + key + '"', 3500);
+        return;
+      }
+      this._pendingArchiveProject = '';
       if (this.canEdit) {
         for (const s of this.sessions) {
           if (s._deleted || s._archived) continue;
@@ -1611,6 +1863,9 @@ const app = blok.mount('#app', {
           { div: { class: 'feed-tools', children: [
             { span: { text: $.statsText } },
             { span: { text: $.tokensText } },
+            { when: $.activeFilterCount, children: [
+              { button: { class: 'tool-chip clearchip', click: 'clearFilters', text: $.clearFiltersText } },
+            ]},
             { span: { class: 'spacer' } },
             { span: { class: 'flabel', text: 'sort' } },
             { each: $.sortOptions, as: 'o', key: 'key', children: [
@@ -1620,8 +1875,61 @@ const app = blok.mount('#app', {
                 text: $.o.label,
               }},
             ]},
-            { button: { class: 'tool-chip', click: 'toggleDensity', text: $.densityBtnText } },
+            { button: { class: 'tool-chip', click: 'toggleDir', bind: { title: 'Toggle sort direction' }, text: $.dirBtnText } },
+            { button: { class: 'tool-chip', click: 'toggleView', text: $.viewBtnText } },
+            { when: $.not.isTable, children: [
+              { button: { class: 'tool-chip', click: 'toggleDensity', text: $.densityBtnText } },
+            ]},
           ]}},
+
+          { when: $.isTable, children: [
+            { div: { class: 'table-wrap', children: [
+              { table: { class: 'sessions-table', children: [
+                { thead: { children: [
+                  { tr: { children: [
+                    { each: $.tableHeaders, as: 'th', key: 'id', children: [
+                      { th: { children: [
+                        { when: $.th.sortable, children: [
+                          { button: { class: 'th-btn', click: 'sortBy(th.key)', text: $.th.text } },
+                        ]},
+                        { when: $.not.th.sortable, children: [
+                          { span: { text: $.th.text } },
+                        ]},
+                      ]}},
+                    ]},
+                  ]}},
+                ]}},
+                { tbody: { children: [
+                  { each: $.feed, as: 's', key: 'id', children: [
+                    { tr: {
+                      class: { 'row-hidden': $.s._isHidden, 'row-deleted': $.s._deleted },
+                      click: 'openDetail(s)',
+                      children: [
+                        { td: { class: 'mono', text: $.s._startText } },
+                        { td: { class: 'mono', children: [
+                          { span: { text: $.s._lastText } },
+                          { span: { class: 'rel', text: $.s._endRelText } },
+                        ]}},
+                        { td: { class: 'td-title', children: [
+                          { when: $.s._pinned, children: [ { span: { class: 'card-pin', text: '★ ' } } ]},
+                          { span: { text: $.s.title } },
+                        ]}},
+                        { td: { class: 'mono td-proj', text: $.s.project } },
+                        { td: { text: $.s._modelLabel } },
+                        { td: { children: [ { span: { class: $.s._pillClass, text: $.s.status } } ] } },
+                        { td: { class: 'num', text: $.s._msgsText } },
+                        { td: { class: 'num', text: $.s._durLabel } },
+                        { td: { class: 'num', text: $.s._tokShort } },
+                        { td: { class: 'num', text: $.s._costLabel } },
+                      ],
+                    }},
+                  ]},
+                ]}},
+              ]}},
+            ]}},
+          ]},
+
+          { when: $.not.isTable, children: [
 
           { div: { class: ['cards', { compact: $.isCompact }], children: [
             { each: $.feed, as: 's', key: 'id', children: [
@@ -1744,10 +2052,12 @@ const app = blok.mount('#app', {
               ]}},
             ]},
 
-            { when: $.not.feed.length, children: [
-              { div: { class: 'no-results', text: 'No sessions found.' } },
-            ]},
           ]}},
+          ]},
+
+          { when: $.not.feed.length, children: [
+            { div: { class: 'no-results', text: 'No sessions found.' } },
+          ]},
         ]}},
       ]}},
 
@@ -1829,6 +2139,10 @@ const app = blok.mount('#app', {
                     text: $.deleteBtnText } },
               ]},
               { span: { class: 'spacer' } },
+              { when: $.detailIsLocal, children: [
+                { button: { class: 'btn', 'click.stop': 'openTranscript',
+                    bind: { title: 'Read the full conversation transcript' }, text: '📜 Transcript' } },
+              ]},
               { button: { class: 'btn', 'click.stop': 'copyId', text: 'Copy id' } },
               { button: { class: 'btn', 'click.stop': 'copyResume(detail)', text: 'Copy resume' } },
               { when: $.canResume, children: [
@@ -1982,6 +2296,15 @@ try {
     // -- Head + filters --
     const head = el('div', 'stats-head');
     head.append(el('h2', null, 'Usage dashboard'));
+    if (SERVER_MODE) {
+      const report = el('button', 'btn', '📄 report (md)');
+      report.title = 'Markdown report of this range: sessions grouped by project, with costs';
+      report.addEventListener('click', () => {
+        const d = state.range === Infinity ? 'all' : state.range;
+        window.open('/api/report?days=' + d, '_blank');
+      });
+      head.append(report);
+    }
     const close = el('button', 'btn', 'Close');
     close.addEventListener('click', closeStats);
     head.append(close);
@@ -2260,6 +2583,167 @@ try {
     state.sessions = await getSessions();
     overlay.classList.add('open');
     render();
+  };
+})();
+
+// ===================== Transcript viewer (vanilla DOM) =====================
+(function () {
+  let overlay = null, listEl = null, searchEl = null, countEl = null, titleEl = null;
+  let marks = [], cur = -1, onlyMatches = false, onlyBtn = null;
+  let debounce = null;
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function build() {
+    overlay = el('div', 'tr-overlay');
+    const head = el('div', 'tr-head');
+    titleEl = el('h2');
+    searchEl = el('input', 'tr-search');
+    searchEl.placeholder = 'Search in transcript…';
+    searchEl.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(applySearch, 150);
+    });
+    countEl = el('span', 'tr-count', '');
+    const prev = el('button', 'btn', '↑');
+    prev.title = 'Previous match';
+    prev.addEventListener('click', () => jump(cur - 1));
+    const next = el('button', 'btn', '↓');
+    next.title = 'Next match';
+    next.addEventListener('click', () => jump(cur + 1));
+    onlyBtn = el('button', 'btn', 'only matches');
+    onlyBtn.addEventListener('click', () => {
+      onlyMatches = !onlyMatches;
+      onlyBtn.classList.toggle('active', onlyMatches);
+      applySearch();
+    });
+    const close = el('button', 'btn', 'Close');
+    close.addEventListener('click', closeViewer);
+    head.append(titleEl, searchEl, countEl, prev, next, onlyBtn, close);
+    const body = el('div', 'tr-body');
+    listEl = el('div', 'tr-list');
+    body.append(listEl);
+    overlay.append(head, body);
+    document.body.append(overlay);
+    document.addEventListener('keydown', e => {
+      if (!overlay.classList.contains('open')) return;
+      if (e.key === 'Escape') closeViewer();
+      if (e.key === 'Enter' && document.activeElement === searchEl) jump(e.shiftKey ? cur - 1 : cur + 1);
+    });
+  }
+
+  function closeViewer() {
+    overlay.classList.remove('open');
+  }
+
+  function renderMessages(messages) {
+    listEl.replaceChildren();
+    if (!messages.length) {
+      listEl.append(el('div', 'tr-empty', 'Empty transcript.'));
+      return;
+    }
+    for (const m of messages) {
+      const box = el('div', 'tr-msg ' + (m.role === 'user' ? 'user' : 'assistant'));
+      const role = el('div', 'tr-role');
+      role.append(el('span', null, m.role === 'user' ? 'You' : 'Claude'));
+      if (m.model) role.append(el('span', 'tr-ts', modelDisplay(m.model)));
+      if (m.ts) role.append(el('span', 'tr-ts', fmtExact(m.ts.replace('T', ' ').slice(0, 16))));
+      box.append(role);
+      if (m.text) {
+        const t = el('div', 'tr-text', m.text);
+        t.dataset.orig = m.text;
+        box.append(t);
+      }
+      if (m.tools && m.tools.length) {
+        const tools = el('div', 'tr-tools');
+        for (const label of m.tools) {
+          const row = el('div', 'tr-tool', '⚙ ' + label);
+          row.title = label;
+          tools.append(row);
+        }
+        box.append(tools);
+      }
+      listEl.append(box);
+    }
+  }
+
+  function applySearch() {
+    const q = searchEl.value.trim().toLowerCase();
+    marks = [];
+    cur = -1;
+    for (const msg of listEl.querySelectorAll('.tr-msg')) {
+      const textEl = msg.querySelector('.tr-text');
+      const orig = textEl ? textEl.dataset.orig : '';
+      let hasMatch = false;
+      if (textEl) {
+        if (!q) {
+          textEl.textContent = orig;
+        } else {
+          textEl.replaceChildren();
+          const lower = orig.toLowerCase();
+          let i = 0;
+          while (true) {
+            const idx = lower.indexOf(q, i);
+            if (idx === -1) {
+              textEl.append(orig.slice(i));
+              break;
+            }
+            textEl.append(orig.slice(i, idx));
+            const mk = document.createElement('mark');
+            mk.textContent = orig.slice(idx, idx + q.length);
+            textEl.append(mk);
+            marks.push(mk);
+            hasMatch = true;
+            i = idx + q.length;
+          }
+        }
+      }
+      // tool labels count as searchable content too
+      if (q && !hasMatch) {
+        for (const tool of msg.querySelectorAll('.tr-tool')) {
+          if (tool.textContent.toLowerCase().includes(q)) { hasMatch = true; break; }
+        }
+      }
+      msg.classList.toggle('tr-hidden', !!q && onlyMatches && !hasMatch);
+    }
+    countEl.textContent = q ? marks.length + ' match' + (marks.length !== 1 ? 'es' : '') : '';
+    if (marks.length) jump(0);
+  }
+
+  function jump(i) {
+    if (!marks.length) return;
+    if (cur >= 0 && marks[cur]) marks[cur].classList.remove('cur');
+    cur = ((i % marks.length) + marks.length) % marks.length;
+    const mk = marks[cur];
+    mk.classList.add('cur');
+    mk.closest('.tr-msg').classList.remove('tr-hidden');
+    mk.scrollIntoView({ block: 'center' });
+    countEl.textContent = (cur + 1) + ' / ' + marks.length;
+  }
+
+  window.__openTranscript = async function (id, title) {
+    if (!overlay) build();
+    titleEl.textContent = title || 'Transcript';
+    searchEl.value = '';
+    countEl.textContent = '';
+    onlyMatches = false;
+    onlyBtn.classList.remove('active');
+    listEl.replaceChildren(el('div', 'tr-empty', 'Loading transcript…'));
+    overlay.classList.add('open');
+    try {
+      const r = await fetch('/api/transcript?id=' + encodeURIComponent(id));
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+      renderMessages(data.messages || []);
+      searchEl.focus();
+    } catch (e) {
+      listEl.replaceChildren(el('div', 'tr-empty', 'Could not load transcript: ' + e.message));
+    }
   };
 })();
 </script>

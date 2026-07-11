@@ -9,7 +9,8 @@ Automatically tracks and summarizes Claude Code sessions using Claude Haiku. Pro
 - **Automatic tracking** - Hooks fire on every response and session end
 - **AI summaries** - Claude Haiku generates title, summary, topics, and status
 - **Per-project summaries** - `SESSION_SUMMARIES.md` in each project directory for future session context
-- **Web UI** - Sidebar facets (project, machine, account, status), a single sortable feed (recency, cost, tokens, duration), comfortable/compact density, and search with operators (`host:`, `status:`, `project:`, `model:`, `account:`, `branch:`, `before:`/`after:`)
+- **Web UI** - Sidebar facets (project, machine, account, status), cards or a dense sortable table, sort by recency/start date/cost/tokens/duration/messages in either direction, comfortable/compact density, and search with operators (`host:`, `status:`, `project:`, `model:`, `account:`, `branch:`, `before:`/`after:`)
+- **Transcript viewer** - Read any session's full conversation (user + assistant messages, tool calls) in the browser, with in-transcript search, match highlighting and prev/next navigation
 - **Cost & model per session** - The hook records token usage per model, so every card shows what that session would have cost on the API, which model ran it, exact start/last-activity timestamps and duration
 - **Multi-account aware** - Each session is stamped with the account/subscription it ran under (email + plan); filter sessions by account in the UI
 - **Resume commands** - One-click copy of `claude --resume <id>` commands
@@ -17,6 +18,8 @@ Automatically tracks and summarizes Claude Code sessions using Claude Haiku. Pro
 - **Backfill** - One command imports your whole pre-existing transcript history into the tracker (`--update-tokens` re-stamps per-model usage on sessions imported before model tracking)
 - **Editing** - Fix Haiku's titles/summaries, add your own searchable notes, pin, archive or delete sessions from the UI (synced across machines, never lost to re-analysis)
 - **Usage dashboard** - Activity heatmap, tokens per day by machine, per-model and top-project rankings, and an API-equivalent cost that uses exact per-model rates where available, with range filters and a table view
+- **Markdown report** - `GET /api/report?days=7` renders a "what did I do this week" markdown report grouped by project, with per-session costs (📄 button in the dashboard)
+- **Terminal profiles** - Optional `terminal.json` picks the Windows Terminal profile/shell (or preferred Linux terminal) that click-to-resume opens
 - **Summary endpoint** - `GET /api/summary` serves today/this-week aggregates (sessions, cost, tokens) for widgets like a Glance custom-api panel
 - **Session history skill** - Claude can read past session context via the plugin skill
 
@@ -60,7 +63,9 @@ Static HTML file - no server needed, opens directly in the browser:
 open ~/.claude/session-tracker/index.html
 ```
 
-The web UI is auto-provisioned by the hook on first run. Layout: a sidebar of facet filters (projects with counts, machines, accounts, statuses, archived/deleted toggles) next to a single session feed. The feed sorts by last activity, cost, tokens or duration, and has a comfortable/compact density toggle (both persisted per browser). Each card shows the session's API-equivalent cost and total tokens, the model(s) that ran it, exact start and last-activity timestamps (local time, relative time alongside), duration, branch, message count, machine/account chips, summary, topics and your note. The search box combines free text with operators: `host:windpad status:debugging model:opus before:2026-07-01 broker`. Clicking a card opens the detail view; resume/fork are explicit buttons, so nothing launches by accident.
+The web UI is auto-provisioned by the hook on first run. Layout: a sidebar of facet filters (projects with counts, machines, accounts, statuses, archived/deleted toggles) next to a single session feed, with a **clear filters** button whenever any filter or search is active. The feed renders as cards or as a dense table (sortable column headers), sorts by last activity, start date, cost, tokens, duration or messages in either direction, and has a comfortable/compact density toggle - view, sort and density are persisted per browser. Each card shows the session's API-equivalent cost and total tokens, the model(s) that ran it, exact start and last-activity timestamps in day-month-year format and local time (relative time alongside), duration, branch, message count, machine/account chips, summary, topics and your note. The search box combines free text with operators: `host:windpad status:debugging model:opus before:2026-07-01 broker`. Clicking a card opens the detail view; resume/fork are explicit buttons, so nothing launches by accident.
+
+When served over http, the detail view also has a **📜 Transcript** button (sessions on the serving machine only): it loads the full conversation from the transcript - your messages, Claude's replies and one-line labels of every tool call (tool results are skipped; they dominate transcript size). The viewer has its own search with match highlighting, a match counter, prev/next jumps (Enter / Shift+Enter) and an "only matches" filter.
 
 ### Click-to-resume (optional local server)
 
@@ -101,6 +106,20 @@ API endpoints:
 | `/api/config` | GET | `{ "resume": bool }` - feature discovery for the UI |
 | `/api/resume` | POST | `{ "id": "<session-id>", "fork": bool }` - opens a terminal resuming (or forking) that session |
 | `/api/summary` | GET | Today/this-week aggregates (sessions, API-equivalent cost, output tokens) + last session - for widgets (e.g. a [Glance](https://github.com/glanceapp/glance) custom-api panel) |
+| `/api/transcript` | GET | `?id=<session-id>` - parsed conversation (user/assistant text + tool-call labels) for the transcript viewer; sessions on this machine only |
+| `/api/report` | GET | `?days=7\|30\|90\|all` - markdown report of the range, grouped by project with per-session costs |
+
+Terminal preferences (optional): drop a `terminal.json` next to the data files to control what click-to-resume opens:
+
+```json
+{
+  "wtProfile": "PowerShell",
+  "shell": "pwsh",
+  "linux": "konsole"
+}
+```
+
+`wtProfile` is a Windows Terminal profile name (`wt -p <profile>`), `shell` picks what runs the resume command on Windows (`cmd`, the default, or `pwsh`), and `linux` puts your preferred launcher first (`x-terminal-emulator`, `gnome-terminal`, `konsole` or `xterm`). Omit the file for the previous defaults.
 
 `/api/resume` safety model: localhost bind by default, a required custom header (`x-session-tracker: 1`) forces a CORS preflight so web pages on other origins can't trigger it, the session id must match the tracked data (400 on malformed, 404 on unknown), and the working directory comes from the stored session - never from the request. Terminal launchers per platform: `wt`/`cmd` on Windows (Windows Terminal is an app-execution alias that Bun can neither stat nor spawn, so it's detected with `where.exe` and launched through `cmd /c start`), `Terminal.app` via osascript on macOS, `x-terminal-emulator`/`gnome-terminal`/`konsole`/`xterm` on Linux.
 
@@ -121,6 +140,42 @@ The UI auto-refreshes every minute in server mode, so edits and new sessions fro
 The **📊 stats** button opens a usage dashboard over the same data: a KPI row (sessions, tokens generated, cache read, API-equivalent value), a GitHub-style activity heatmap, tokens-per-day stacked by machine, a by-model ranking, a top-projects ranking, and a per-project table. A range filter (7/30/90 days or all) scopes everything. The main UI's header shows the same idea at a glance: sessions today, $ today and $ last 7 days.
 
 The cost figure is an *equivalent value*, not a bill - published API rates (input, output, cache read ≈0.1× input, cache write ≈1.25× input at 5-minute TTL) applied to the token counts. Sessions carry a per-model token breakdown (`models`), so each model is priced at its own rate. Sessions tracked before model recording (or whose transcripts live on another machine) fall back to the **fallback $** selector's rates and are marked as estimated (`~` on cards, "(assumed)" in the by-model chart); run `bun scripts/backfill.ts --update-tokens` on the machine that owns them to stamp exact data. For subscription users it reads as "what this usage would have cost on the API". Deleted sessions are excluded; archived ones count.
+
+The **📄 report (md)** button (server mode) renders the current range as a markdown report - sessions grouped by project, each with status, dates, duration, cost and its summary - straight from `GET /api/report?days=<n|all>`. Pipe it wherever you like:
+
+```bash
+curl -s http://127.0.0.1:4457/api/report?days=7 > weekly-report.md
+```
+
+### Glance widget
+
+If you run a [Glance](https://github.com/glanceapp/glance) dashboard, `/api/summary` slots straight into a `custom-api` widget:
+
+```yaml
+- type: custom-api
+  title: Claude Sessions
+  url: http://127.0.0.1:4457/api/summary
+  cache: 5m
+  template: |
+    <div class="flex justify-between text-center">
+      <div>
+        <div class="color-highlight size-h3">{{ .JSON.Int "today.sessions" }}</div>
+        <div class="size-h6">TODAY</div>
+      </div>
+      <div>
+        <div class="color-highlight size-h3">${{ .JSON.Float "today.cost" | printf "%.2f" }}</div>
+        <div class="size-h6">$ TODAY</div>
+      </div>
+      <div>
+        <div class="color-highlight size-h3">${{ .JSON.Float "week.cost" | printf "%.0f" }}</div>
+        <div class="size-h6">$ 7 DAYS</div>
+      </div>
+    </div>
+    <div class="margin-top-15 size-h5 text-truncate">{{ .JSON.String "last_session.title" }}</div>
+    <div class="size-h6 color-subdue">{{ .JSON.String "last_session.project" }} · {{ .JSON.Int "last_session.ago_minutes" }}m ago</div>
+```
+
+Point the URL at whichever machine serves your (synced) data dir; the summary covers all machines' sessions.
 
 ### Backfill your history
 
