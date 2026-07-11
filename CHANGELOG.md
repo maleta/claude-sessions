@@ -79,11 +79,18 @@ Enter/Shift+Enter prev-next jumps, "only matches" filter).
 - Archiving a whole project from the sidebar now requires a second confirming
   click (it was too easy to archive dozens of sessions by accident).
 
-### Markdown report
+### Markdown report + Telegram digest
 
 `GET /api/report?days=7|30|90|all` renders a "what did I do" report: totals,
 then sessions grouped by project (status, dates, duration, cost, summary,
 notes). 📄 button in the usage dashboard opens the current range's report.
+
+`scripts/report-telegram.ts` posts a compact digest (totals, top projects by
+cost, recent titles) to a Telegram chat/topic via a bot you create with
+@BotFather. Config from `<data dir>/telegram.json` (`botToken`, `chatId`,
+optional `threadId`/`days`) or env vars; `--dry-run` previews without sending.
+Made to run on a schedule. `telegram.json`/`terminal.json`/`remote-hosts.json`
+and the data files are now gitignored so a repo-based data dir can't leak them.
 
 ### Terminal profiles
 

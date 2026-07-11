@@ -147,6 +147,26 @@ The **📄 report (md)** button (server mode) renders the current range as a mar
 curl -s http://127.0.0.1:4457/api/report?days=7 > weekly-report.md
 ```
 
+To push a recurring digest to Telegram, create a bot with [@BotFather](https://t.me/BotFather) and drop a `telegram.json` in the data dir:
+
+```json
+{
+  "botToken": "123456:ABC-DEF...",
+  "chatId": "-1001234567890",
+  "threadId": 42,
+  "days": 7
+}
+```
+
+`chatId` is your user id or a group/channel id; `threadId` is optional (a forum topic). Then:
+
+```bash
+bun scripts/report-telegram.ts --dry-run   # preview the message
+bun scripts/report-telegram.ts             # send it
+```
+
+Schedule it (cron / Task Scheduler) for a weekly summary. Env vars (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_THREAD_ID`, `REPORT_DAYS`) override the file, and `--days N` overrides the range. Keep `telegram.json` out of version control (it's gitignored).
+
 ### Glance widget
 
 If you run a [Glance](https://github.com/glanceapp/glance) dashboard, `/api/summary` slots straight into a `custom-api` widget:
