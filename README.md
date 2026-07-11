@@ -15,6 +15,7 @@ Automatically tracks and summarizes Claude Code sessions using Claude Haiku. Pro
 - **Click-to-resume** - With the optional local server, clicking a session card opens a new terminal already resuming that session
 - **Backfill** - One command imports your whole pre-existing transcript history into the tracker
 - **Editing** - Fix Haiku's titles/summaries, add your own searchable notes, pin, archive or delete sessions from the UI (synced across machines, never lost to re-analysis)
+- **Usage dashboard** - Activity heatmap, tokens per day by machine, top projects, and an API-equivalent cost estimate (pick the model rates), with range filters and a table view
 - **Session history skill** - Claude can read past session context via the plugin skill
 
 ## Requirements
@@ -111,6 +112,12 @@ Edits never touch the per-machine data files - the hooks own those and would ove
 - Set `SESSION_TRACKER_NO_EDIT=1` to disable the editing endpoint on a server.
 
 The UI auto-refreshes every minute in server mode, so edits and new sessions from other machines/browsers appear on their own. On `file://` the UI stays read-only (with the old per-browser hide); existing localStorage hides are migrated to synced archives the first time you use an edit-capable server.
+
+### Usage dashboard
+
+The **📊 stats** button opens a usage dashboard over the same data: a KPI row (sessions, tokens generated, cache read, API-equivalent value), a GitHub-style activity heatmap, tokens-per-day stacked by machine, a top-projects ranking, and a per-project table. A range filter (7/30/90 days or all) scopes everything, and the **$ as** selector picks which model's API rates the cost estimate uses.
+
+The cost figure is an *equivalent value*, not a bill: sessions don't record which model each turn ran on, so the dashboard applies one model's published API rates (input, output, cache read ≈0.1× input, cache write ≈1.25× input at 5-minute TTL) to the accumulated token counts. For subscription users it reads as "what this usage would have cost on the API". Deleted sessions are excluded; archived ones count.
 
 ### Backfill your history
 

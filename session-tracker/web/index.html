@@ -410,6 +410,102 @@
   .btn.active { border-color: #58a6ff; background: #1a2a3a; color: #e6edf3; }
   .spacer { flex: 1; }
 
+  /* -- Stats dashboard -- */
+  .stats-overlay {
+    position: fixed;
+    inset: 0;
+    background: #0d1117;
+    z-index: 25;
+    overflow-y: auto;
+    padding: 24px;
+    display: none;
+  }
+  .stats-overlay.open { display: block; }
+  .stats-inner { max-width: 1080px; margin: 0 auto; }
+  .stats-head {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+  .stats-head h2 { font-size: 1.3rem; color: #e6edf3; flex: 1; }
+  .stats-filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .stats-filters .flabel { font-size: 0.75rem; color: #484f58; text-transform: uppercase; letter-spacing: 0.04em; margin-left: 10px; }
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .kpi {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 14px 18px;
+  }
+  .kpi .klabel { font-size: 0.75rem; color: #8b949e; margin-bottom: 4px; }
+  .kpi .kvalue { font-size: 1.7rem; font-weight: 600; color: #e6edf3; }
+  .kpi .ksub { font-size: 0.72rem; color: #484f58; margin-top: 2px; }
+  .chart-card {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 20px;
+  }
+  .chart-card h3 { font-size: 0.9rem; color: #c9d1d9; margin-bottom: 4px; font-weight: 600; }
+  .chart-card .csub { font-size: 0.72rem; color: #484f58; margin-bottom: 12px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .legend .lkey { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #8b949e; }
+  .legend .lswatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .heatmap { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+  .hm-col { display: flex; flex-direction: column; gap: 3px; }
+  .hm-cell {
+    width: 13px; height: 13px; border-radius: 3px;
+    background: #21262d;
+  }
+  .hm-scale { display: flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 0.7rem; color: #484f58; }
+  .hm-scale .hm-cell { width: 11px; height: 11px; }
+  .cols-chart { position: relative; height: 190px; margin-left: 46px; }
+  .cols-grid { position: absolute; inset: 0; }
+  .cols-grid .gline { position: absolute; left: 0; right: 0; border-top: 1px solid #21262d; }
+  .cols-grid .gtick { position: absolute; right: 100%; padding-right: 6px; font-size: 0.68rem; color: #484f58; transform: translateY(-50%); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cols-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 2px; }
+  .col-slot { flex: 1; min-width: 3px; max-width: 24px; display: flex; flex-direction: column-reverse; height: 100%; justify-content: flex-start; }
+  .col-seg { width: 100%; margin-top: 2px; }
+  .col-seg:last-child { border-radius: 3px 3px 0 0; }
+  .cols-x { margin-left: 46px; display: flex; justify-content: space-between; font-size: 0.68rem; color: #484f58; margin-top: 6px; }
+  .hbars .hb-row { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
+  .hbars .hb-name { width: 190px; font-size: 0.78rem; color: #c9d1d9; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: monospace; }
+  .hbars .hb-track { flex: 1; display: flex; align-items: center; gap: 8px; }
+  .hbars .hb-bar { height: 14px; border-radius: 0 3px 3px 0; background: #3987e5; min-width: 2px; }
+  .hbars .hb-val { font-size: 0.72rem; color: #8b949e; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stats-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  .stats-table th { text-align: right; color: #484f58; font-weight: 500; padding: 5px 10px; border-bottom: 1px solid #21262d; }
+  .stats-table th:first-child, .stats-table td:first-child { text-align: left; font-family: monospace; }
+  .stats-table td { text-align: right; color: #8b949e; padding: 4px 10px; border-bottom: 1px solid #1c2128; font-variant-numeric: tabular-nums; }
+  .stats-table td:first-child { color: #c9d1d9; }
+  .chart-tip {
+    position: fixed;
+    background: #1c2128;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.78rem;
+    color: #8b949e;
+    pointer-events: none;
+    z-index: 40;
+    display: none;
+    max-width: 280px;
+  }
+  .chart-tip .tv { color: #e6edf3; font-weight: 600; }
+
   /* -- Mobile -- */
   @media (max-width: 768px) {
     body { padding: 12px; }
@@ -798,6 +894,9 @@ const app = blok.mount('#app', {
       this.editStatus = key;
     },
     noop() { /* click.stop anchor for the modal panel */ },
+    openStats() {
+      if (window.__openStats) window.__openStats();
+    },
     _toast(msg, ms) {
       this.toastMsg = msg;
       this.showToast = true;
@@ -1006,6 +1105,12 @@ const app = blok.mount('#app', {
               text: $.deletedBtnText,
             }},
           ]},
+          { button: {
+            class: 'toggle-hidden',
+            click: 'openStats',
+            bind: { title: 'Usage dashboard: activity heatmap, tokens per day, cost equivalent' },
+            text: '📊 stats',
+          }},
           ...(SERVER_MODE ? [] : [
             { span: {
               class: 'serve-hint',
@@ -1280,6 +1385,371 @@ try {
   }
 } catch (e) { /* ignore */ }
 });
+
+// ===================== Usage dashboard (vanilla DOM) =====================
+// Rendered outside blok into its own overlay. Palette validated with the
+// dataviz six-checks validator against surface #161b22 (dark):
+//   categorical (machines): #3987e5 #199e70 #c98500  (worst adjacent CVD ΔE 41.3)
+//   sequential heatmap ramp: #184f95 #256abf #3987e5 #6da7ec #9ec5f4 (monotone L)
+(function () {
+  const SERIES = ['#3987e5', '#199e70', '#c98500'];
+  const OTHER_COLOR = '#8b949e';
+  const RAMP = ['#21262d', '#184f95', '#256abf', '#3987e5', '#6da7ec', '#9ec5f4'];
+
+  // API-equivalent pricing, $/1M tokens (Claude API rates as of 2026-06).
+  // Cache: read ≈ 0.1× input, write ≈ 1.25× input (5-minute TTL).
+  const PRICES = {
+    'Fable 5':   { in: 10, out: 50 },
+    'Opus 4.8':  { in: 5,  out: 25 },
+    'Sonnet 5':  { in: 3,  out: 15 },
+    'Haiku 4.5': { in: 1,  out: 5 },
+  };
+
+  const state = { range: 30, model: 'Opus 4.8', sessions: [] };
+  let overlay = null, tip = null;
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function money(v) {
+    return '$' + (v >= 100 ? Math.round(v).toLocaleString('en-US') : v.toFixed(2));
+  }
+
+  function cost(tk, p) {
+    return (tk.input * p.in + tk.output * p.out + tk.cache_read * 0.1 * p.in + tk.cache_write * 1.25 * p.in) / 1e6;
+  }
+
+  function dayKey(d) {
+    return d.toISOString().slice(0, 10);
+  }
+
+  async function getSessions() {
+    if (SERVER_MODE) {
+      try { return await fetchSessions(); } catch (e) { /* fall through */ }
+    }
+    return window.SESSIONS_DATA || [];
+  }
+
+  function showTip(evt, lines) {
+    tip.replaceChildren();
+    for (const [label, value] of lines) {
+      const row = el('div');
+      if (value === undefined) {
+        row.textContent = label;
+      } else {
+        const v = el('span', 'tv', value);
+        row.append(v, ' ', label);
+      }
+      tip.append(row);
+    }
+    tip.style.display = 'block';
+    const x = Math.min(evt.clientX + 14, window.innerWidth - 300);
+    tip.style.left = x + 'px';
+    tip.style.top = (evt.clientY + 14) + 'px';
+  }
+  function hideTip() { tip.style.display = 'none'; }
+  function hover(node, linesFn) {
+    node.addEventListener('pointermove', e => showTip(e, linesFn()));
+    node.addEventListener('pointerleave', hideTip);
+  }
+
+  function aggregate(sessions, days) {
+    const now = new Date();
+    const from = new Date(now); from.setDate(from.getDate() - (days - 1));
+    const fromKey = days === Infinity ? '' : dayKey(from);
+    const live = sessions.filter(s => !(s.meta && s.meta.deleted));
+    const inRange = live.filter(s => (s.started_at || '').slice(0, 10) >= fromKey);
+    const byDay = new Map();
+    const byProject = new Map();
+    const hosts = new Map();
+    const total = { input: 0, output: 0, cache_read: 0, cache_write: 0 };
+    for (const s of inRange) {
+      const day = (s.started_at || '').slice(0, 10);
+      if (!day) continue;
+      const tk = s.tokens || { input: 0, output: 0, cache_read: 0, cache_write: 0 };
+      const host = s.host || 'unknown';
+      if (!byDay.has(day)) byDay.set(day, { sessions: 0, out: 0, total: 0, byHost: new Map() });
+      const d = byDay.get(day);
+      d.sessions++; d.out += tk.output; d.total += tk.input + tk.output + tk.cache_read + tk.cache_write;
+      d.byHost.set(host, (d.byHost.get(host) || 0) + tk.output);
+      const proj = s.project || 'unknown';
+      if (!byProject.has(proj)) byProject.set(proj, { sessions: 0, input: 0, output: 0, cache_read: 0, cache_write: 0 });
+      const P = byProject.get(proj);
+      P.sessions++; P.input += tk.input; P.output += tk.output; P.cache_read += tk.cache_read; P.cache_write += tk.cache_write;
+      hosts.set(host, (hosts.get(host) || 0) + tk.output);
+      total.input += tk.input; total.output += tk.output; total.cache_read += tk.cache_read; total.cache_write += tk.cache_write;
+    }
+    const hostOrder = Array.from(hosts.keys()).sort();
+    return { inRange, byDay, byProject, hostOrder, total };
+  }
+
+  function hostColor(host, hostOrder) {
+    const i = hostOrder.indexOf(host);
+    return i >= 0 && i < SERIES.length ? SERIES[i] : OTHER_COLOR;
+  }
+
+  function render() {
+    const inner = overlay.querySelector('.stats-inner');
+    inner.replaceChildren();
+    const days = state.range;
+    const agg = aggregate(state.sessions, days);
+    const p = PRICES[state.model];
+
+    // -- Head + filters --
+    const head = el('div', 'stats-head');
+    head.append(el('h2', null, 'Usage dashboard'));
+    const close = el('button', 'btn', 'Close');
+    close.addEventListener('click', closeStats);
+    head.append(close);
+    inner.append(head);
+
+    const filters = el('div', 'stats-filters');
+    filters.append(el('span', 'flabel', 'Range'));
+    for (const [label, value] of [['7d', 7], ['30d', 30], ['90d', 90], ['all', Infinity]]) {
+      const b = el('button', 'account-chip' + (state.range === value ? ' active' : ''), label);
+      b.addEventListener('click', () => { state.range = value; render(); });
+      filters.append(b);
+    }
+    filters.append(el('span', 'flabel', '$ as'));
+    for (const name of Object.keys(PRICES)) {
+      const b = el('button', 'account-chip' + (state.model === name ? ' active' : ''), name);
+      b.addEventListener('click', () => { state.model = name; render(); });
+      filters.append(b);
+    }
+    inner.append(filters);
+
+    // -- KPI row --
+    const kpis = el('div', 'kpis');
+    const kpi = (label, value, sub) => {
+      const k = el('div', 'kpi');
+      k.append(el('div', 'klabel', label));
+      k.append(el('div', 'kvalue', value));
+      if (sub) k.append(el('div', 'ksub', sub));
+      return k;
+    };
+    const t = agg.total;
+    kpis.append(kpi('Sessions', String(agg.inRange.length), 'archived included, deleted excluded'));
+    kpis.append(kpi('Tokens generated', formatTokens(t.output), formatTokens(t.input) + ' in (regular)'));
+    kpis.append(kpi('Cache read', formatTokens(t.cache_read), formatTokens(t.cache_write) + ' written'));
+    kpis.append(kpi('API-equivalent value', money(cost(t, p)), 'at ' + state.model + ' rates, 5m cache TTL'));
+    inner.append(kpis);
+
+    // -- Activity heatmap --
+    const hmCard = el('div', 'chart-card');
+    hmCard.append(el('h3', null, 'Activity'));
+    const capped = days === Infinity;
+    const hmDays = Math.min(days === Infinity ? 364 : days, 364);
+    hmCard.append(el('div', 'csub', 'sessions per day' + (capped ? ' · showing last 52 weeks' : '')));
+    const hm = el('div', 'heatmap');
+    const today = new Date();
+    const start = new Date(today); start.setDate(start.getDate() - (hmDays - 1));
+    // align to Monday
+    const dow = (start.getDay() + 6) % 7;
+    start.setDate(start.getDate() - dow);
+    let maxDay = 1;
+    for (const d of agg.byDay.values()) maxDay = Math.max(maxDay, d.sessions);
+    const thresholds = [1, Math.ceil(maxDay * 0.25), Math.ceil(maxDay * 0.5), Math.ceil(maxDay * 0.75), maxDay];
+    const level = n => {
+      if (!n) return 0;
+      for (let i = 1; i < 5; i++) if (n <= thresholds[i]) return i;
+      return 5;
+    };
+    for (let c = new Date(start); c <= today;) {
+      const col = el('div', 'hm-col');
+      for (let r = 0; r < 7 && c <= today; r++) {
+        const key = dayKey(c);
+        const d = agg.byDay.get(key);
+        const cell = el('div', 'hm-cell');
+        cell.style.background = RAMP[level(d ? d.sessions : 0)];
+        const kd = key, dd = d;
+        hover(cell, () => dd
+          ? [[kd], [' sessions', String(dd.sessions)], [' tokens (all)', formatTokens(dd.total)]]
+          : [[kd], ['no sessions']]);
+        col.append(cell);
+        c.setDate(c.getDate() + 1);
+      }
+      hm.append(col);
+    }
+    hmCard.append(hm);
+    const scale = el('div', 'hm-scale');
+    scale.append(el('span', null, 'less'));
+    for (const color of RAMP) {
+      const sw = el('span', 'hm-cell'); sw.style.background = color; scale.append(sw);
+    }
+    scale.append(el('span', null, 'more'));
+    hmCard.append(scale);
+    inner.append(hmCard);
+
+    // -- Tokens per day, stacked by machine --
+    const dcCard = el('div', 'chart-card');
+    dcCard.append(el('h3', null, 'Tokens generated per day'));
+    dcCard.append(el('div', 'csub', 'output tokens, stacked by machine'));
+    if (agg.hostOrder.length > 1) {
+      const legend = el('div', 'legend');
+      for (const h of agg.hostOrder) {
+        const key = el('span', 'lkey');
+        const sw = el('span', 'lswatch'); sw.style.background = hostColor(h, agg.hostOrder);
+        key.append(sw, h);
+        legend.append(key);
+      }
+      dcCard.append(legend);
+    }
+    const chartDays = Math.min(days === Infinity ? 90 : days, 90);
+    const dayList = [];
+    for (let i = chartDays - 1; i >= 0; i--) {
+      const d = new Date(today); d.setDate(d.getDate() - i);
+      dayList.push(dayKey(d));
+    }
+    let maxOut = 1;
+    for (const key of dayList) {
+      const d = agg.byDay.get(key);
+      if (d) maxOut = Math.max(maxOut, d.out);
+    }
+    const chart = el('div', 'cols-chart');
+    const grid = el('div', 'cols-grid');
+    const step = niceStep(maxOut);
+    for (let v = 0; v <= maxOut; v += step) {
+      const y = 100 - (v / maxOut) * 100;
+      const line = el('div', 'gline'); line.style.top = y + '%';
+      grid.append(line);
+      const tick = el('span', 'gtick', formatTokens(v)); tick.style.top = y + '%';
+      grid.append(tick);
+    }
+    chart.append(grid);
+    const bars = el('div', 'cols-bars');
+    for (const key of dayList) {
+      const slot = el('div', 'col-slot');
+      const d = agg.byDay.get(key);
+      if (d) {
+        for (const h of agg.hostOrder) {
+          const v = d.byHost.get(h) || 0;
+          if (!v) continue;
+          const seg = el('div', 'col-seg');
+          seg.style.height = 'calc(' + ((v / maxOut) * 100) + '% - 2px)';
+          seg.style.background = hostColor(h, agg.hostOrder);
+          slot.append(seg);
+        }
+      }
+      const kd = key, dd = d;
+      hover(slot, () => {
+        const lines = [[kd]];
+        if (dd) {
+          for (const h of agg.hostOrder) {
+            const v = dd.byHost.get(h) || 0;
+            if (v) lines.push([' out · ' + h, formatTokens(v)]);
+          }
+          lines.push([' sessions', String(dd.sessions)]);
+        } else {
+          lines.push(['no sessions']);
+        }
+        return lines;
+      });
+      bars.append(slot);
+    }
+    chart.append(bars);
+    dcCard.append(chart);
+    const xAxis = el('div', 'cols-x');
+    xAxis.append(el('span', null, dayList[0]));
+    xAxis.append(el('span', null, dayList[dayList.length - 1]));
+    dcCard.append(xAxis);
+    if (days === Infinity && chartDays === 90) {
+      dcCard.append(el('div', 'csub', 'daily chart capped at last 90 days (heatmap and totals cover the full range)'));
+    }
+    inner.append(dcCard);
+
+    // -- Top projects --
+    const tpCard = el('div', 'chart-card hbars');
+    tpCard.append(el('h3', null, 'Top projects'));
+    tpCard.append(el('div', 'csub', 'output tokens in range'));
+    const projects = Array.from(agg.byProject, ([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.output - a.output);
+    const top = projects.slice(0, 8);
+    const rest = projects.slice(8);
+    if (rest.length) {
+      const other = { name: 'other (' + rest.length + ' projects)', sessions: 0, input: 0, output: 0, cache_read: 0, cache_write: 0 };
+      for (const r of rest) {
+        other.sessions += r.sessions; other.input += r.input; other.output += r.output;
+        other.cache_read += r.cache_read; other.cache_write += r.cache_write;
+      }
+      top.push(other);
+    }
+    const maxProj = Math.max(1, ...top.map(x => x.output));
+    for (const proj of top) {
+      const row = el('div', 'hb-row');
+      row.append(el('div', 'hb-name', proj.name));
+      const track = el('div', 'hb-track');
+      const bar = el('div', 'hb-bar');
+      bar.style.width = ((proj.output / maxProj) * 100) + '%';
+      if (proj.name.startsWith('other (')) bar.style.background = OTHER_COLOR;
+      track.append(bar);
+      track.append(el('span', 'hb-val', formatTokens(proj.output)));
+      const pr = proj;
+      hover(row, () => [[pr.name], [' sessions', String(pr.sessions)], [' out', formatTokens(pr.output)],
+        [' cache read', formatTokens(pr.cache_read)], [' ≈ value', money(cost(pr, p))]]);
+      row.append(track);
+      tpCard.append(row);
+    }
+    inner.append(tpCard);
+
+    // -- Table view (accessibility twin) --
+    const tblCard = el('div', 'chart-card');
+    tblCard.append(el('h3', null, 'By project (table)'));
+    const table = el('table', 'stats-table');
+    const thead = el('thead');
+    const hr = el('tr');
+    for (const h of ['project', 'sessions', 'in', 'out', 'cache read', 'cache write', '≈ value']) hr.append(el('th', null, h));
+    thead.append(hr); table.append(thead);
+    const tbody = el('tbody');
+    for (const proj of projects) {
+      const tr = el('tr');
+      tr.append(el('td', null, proj.name));
+      tr.append(el('td', null, String(proj.sessions)));
+      tr.append(el('td', null, formatTokens(proj.input)));
+      tr.append(el('td', null, formatTokens(proj.output)));
+      tr.append(el('td', null, formatTokens(proj.cache_read)));
+      tr.append(el('td', null, formatTokens(proj.cache_write)));
+      tr.append(el('td', null, money(cost(proj, p))));
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    tblCard.append(table);
+    inner.append(tblCard);
+  }
+
+  function niceStep(max) {
+    const raw = max / 4;
+    const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+    for (const m of [1, 2, 5, 10]) {
+      if (raw <= m * pow) return m * pow;
+    }
+    return 10 * pow;
+  }
+
+  function closeStats() {
+    overlay.classList.remove('open');
+    hideTip();
+  }
+
+  window.__openStats = async function () {
+    if (!overlay) {
+      overlay = el('div', 'stats-overlay');
+      overlay.append(el('div', 'stats-inner'));
+      document.body.append(overlay);
+      tip = el('div', 'chart-tip');
+      document.body.append(tip);
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && overlay.classList.contains('open')) closeStats();
+      });
+    }
+    state.sessions = await getSessions();
+    overlay.classList.add('open');
+    render();
+  };
+})();
 </script>
 </body>
 </html>

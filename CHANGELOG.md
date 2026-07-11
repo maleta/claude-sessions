@@ -100,6 +100,19 @@ edit-capable server is available (existing hides migrate automatically);
 filter chips, minute-level auto-refresh in server mode, and a single-column
 mobile layout.
 
+### Usage dashboard
+
+A stats view over the tracked data: KPI tiles (sessions, tokens generated,
+cache read, API-equivalent value with a model-rate selector), a GitHub-style
+activity heatmap, tokens-per-day columns stacked by machine, a top-projects
+bar ranking with an explicit "other (N)" bucket, and a per-project table as
+the accessibility twin. One filter row (date range + rate model) scopes every
+chart; caps are labeled, never silent (heatmap ≤52 weeks, daily chart ≤90
+days on "all"). Colors were validated with a CVD/contrast checker against the
+dark surface (categorical worst adjacent ΔE 41.3; sequential ramp monotone).
+Cost is an equivalent-value estimate at published API rates — sessions don't
+record the model per turn, so the rate model is user-selectable.
+
 ### Internal
 
 - `SESSION_TRACKER_DIR` env override for the data directory (isolated testing).
