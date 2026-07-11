@@ -27,7 +27,7 @@
  * Safe to interrupt and re-run: progress is saved after every session.
  */
 
-import { readdirSync, statSync } from "fs";
+import { readdirSync, statSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { join, basename } from "path";
 import {
@@ -38,8 +38,30 @@ import {
   buildConversationText,
   analyzeConversation,
   HOST,
+  BASE_DIR,
   type Session,
 } from "../hooks/session-tracker.ts";
+
+/**
+ * Ids tombstoned via the viewer (sessions-meta*.js, deleted: true).
+ * The backfill must not resurrect sessions the user deleted.
+ */
+function loadTombstones(): Set<string> {
+  const dead = new Set<string>();
+  let names: string[] = [];
+  try { names = readdirSync(BASE_DIR); } catch { return dead; }
+  for (const f of names) {
+    if (!/^sessions-meta(\..+)?\.js$/.test(f)) continue;
+    try {
+      const text = readFileSync(join(BASE_DIR, f), "utf-8");
+      const meta = JSON.parse(text.replace("window.SESSIONS_META = ", "").trimEnd().replace(/;$/, ""));
+      for (const [id, entry] of Object.entries(meta)) {
+        if ((entry as { deleted?: boolean }).deleted) dead.add(id);
+      }
+    } catch { /* unreadable meta file */ }
+  }
+  return dead;
+}
 
 const CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
 const PROJECTS_DIR = join(CONFIG_DIR, "projects");
@@ -164,15 +186,19 @@ async function backfillOne(path: string): Promise<Session | null> {
 async function main(): Promise<void> {
   const sessions = await loadSessions();
   const known = new Set(sessions.map(s => s.id));
+  const tombstones = loadTombstones();
   const all = listTranscripts();
-  const notTracked = all.filter(p => !known.has(basename(p, ".jsonl")));
+  const notDeleted = all.filter(p => !tombstones.has(basename(p, ".jsonl")));
+  const skippedDeleted = all.length - notDeleted.length;
+  const notTracked = notDeleted.filter(p => !known.has(basename(p, ".jsonl")));
   const excluded = EXCLUDE ? notTracked.filter(p => EXCLUDE.test(p)).length : 0;
   const candidates = notTracked
     .filter(p => !EXCLUDE || !EXCLUDE.test(p))
     .slice(0, LIMIT);
 
   console.log(
-    `Transcripts found: ${all.length} | already tracked: ${all.length - notTracked.length}` +
+    `Transcripts found: ${all.length} | already tracked: ${notDeleted.length - notTracked.length}` +
+    (skippedDeleted ? ` | deleted (tombstoned): ${skippedDeleted}` : "") +
     (EXCLUDE ? ` | excluded by ${EXCLUDE}: ${excluded}` : "") +
     ` | to process: ${candidates.length}`
   );

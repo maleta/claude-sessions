@@ -12,7 +12,7 @@ import { mkdirSync, statSync, copyFileSync, unlinkSync, readdirSync } from "fs";
 import { homedir, hostname } from "os";
 import { join, basename } from "path";
 
-const BASE_DIR = process.env.SESSION_TRACKER_DIR
+export const BASE_DIR = process.env.SESSION_TRACKER_DIR
   ?? join(homedir(), ".claude", "session-tracker");
 
 /** Sanitized machine name: filename-safe, stable across runs. */

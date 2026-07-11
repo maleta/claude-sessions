@@ -179,6 +179,11 @@
     opacity: 0.4;
     border-style: dashed;
   }
+  .card.card-deleted {
+    opacity: 0.45;
+    border-style: dashed;
+    border-color: #f85149;
+  }
   .card-top {
     display: flex;
     justify-content: space-between;
@@ -208,11 +213,21 @@
     color: #e6edf3;
     font-weight: 600;
     margin-bottom: 8px;
+    cursor: pointer;
   }
+  .card-title:hover { color: #58a6ff; text-decoration: underline; }
+  .card-pin { color: #d29922; margin-right: 4px; }
   .card-summary {
     font-size: 0.9rem;
     color: #8b949e;
     margin-bottom: 10px;
+  }
+  .card-note {
+    font-size: 0.85rem;
+    color: #d29922;
+    font-style: italic;
+    margin-bottom: 10px;
+    white-space: pre-wrap;
   }
   .card-tokens {
     font-size: 0.75rem;
@@ -296,9 +311,119 @@
     opacity: 0;
     transition: opacity 0.3s;
     pointer-events: none;
+    z-index: 30;
   }
   .copied-toast.show { opacity: 1; }
-  .group-hidden .group-path { color: #484f58; text-decoration: line-through; }
+
+  /* -- Detail modal -- */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(1, 4, 9, 0.75);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 5vh 16px 16px;
+    z-index: 20;
+    overflow-y: auto;
+  }
+  .modal {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    width: 720px;
+    max-width: 100%;
+    padding: 24px;
+  }
+  .modal h2 {
+    font-size: 1.1rem;
+    color: #e6edf3;
+    margin-bottom: 14px;
+  }
+  .edit-label {
+    display: block;
+    font-size: 0.75rem;
+    color: #8b949e;
+    margin: 12px 0 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .edit-input, .edit-area {
+    width: 100%;
+    padding: 8px 10px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #c9d1d9;
+    font-size: 0.9rem;
+    outline: none;
+    font-family: inherit;
+  }
+  .edit-input:focus, .edit-area:focus { border-color: #58a6ff; }
+  .edit-area { min-height: 72px; resize: vertical; }
+  .edit-orig {
+    font-size: 0.75rem;
+    color: #484f58;
+    margin-top: 3px;
+  }
+  .modal-info {
+    font-size: 0.8rem;
+    color: #8b949e;
+    font-family: monospace;
+    margin: 12px 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 14px;
+    word-break: break-all;
+  }
+  .modal-info .k { color: #484f58; }
+  .modal-summaries {
+    margin-top: 6px;
+    font-size: 0.82rem;
+    color: #8b949e;
+    border-left: 2px solid #21262d;
+    padding-left: 10px;
+  }
+  .modal-summaries li { margin: 4px 0 4px 14px; }
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .btn {
+    background: none;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    font-size: 0.82rem;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn:hover { border-color: #58a6ff; color: #58a6ff; }
+  .btn.primary { border-color: #1f6feb; background: #1f6feb; color: #fff; }
+  .btn.primary:hover { background: #388bfd; }
+  .btn.danger:hover { border-color: #f85149; color: #f85149; }
+  .btn.warn { color: #d29922; }
+  .btn.active { border-color: #58a6ff; background: #1a2a3a; color: #e6edf3; }
+  .spacer { flex: 1; }
+
+  /* -- Mobile -- */
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    .header { padding: 0 4px 16px; }
+    .groups {
+      flex-direction: column;
+      overflow-x: visible;
+      padding: 0 4px 16px;
+    }
+    .group { flex: none; min-width: 0; width: 100%; }
+    .card { padding: 12px 14px; }
+    .modal-overlay { padding: 0; align-items: stretch; }
+    .modal { width: 100%; border-radius: 0; min-height: 100%; }
+  }
 </style>
 </head>
 <body>
@@ -307,6 +432,7 @@
 
 <script>window.SESSIONS_DATA = window.SESSIONS_DATA || [];</script>
 <script src="sessions-data.js" onerror="console.warn('sessions-data.js not found - no sessions tracked yet')"></script>
+<script src="sessions-meta.js" onerror="console.warn('sessions-meta.js not found - no local edits yet')"></script>
 <script src="https://cdn.jsdelivr.net/npm/@maleta/blokjs/dist/blokjs.min.js"></script>
 <script>
 function relativeTime(dateStr) {
@@ -334,7 +460,9 @@ function formatTokens(n) {
 }
 
 // Served over http (serve.ts)? Then clicking a card resumes the session
-// in a new terminal via POST /api/resume. On file:// we only offer copy.
+// in a new terminal via POST /api/resume, and metadata (edits, archive,
+// delete, notes) can be written via POST /api/meta. On file:// the UI is
+// read-only apart from the legacy per-browser hide.
 const SERVER_MODE = location.protocol === 'http:' || location.protocol === 'https:';
 
 function accountHue(key) {
@@ -361,89 +489,73 @@ function saveHidden(sessions, projects) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessions, projects }));
 }
 
-const stored = loadHidden();
+function postMeta(id, patch) {
+  return fetch('/api/meta', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-session-tracker': '1' },
+    body: JSON.stringify({ id, patch }),
+  }).then(r => r.json());
+}
+
 let _debounceTimer = null;
 
-// Pre-process sessions once: sort, build search index, parse topics, build derived fields
-const _raw = (window.SESSIONS_DATA || [])
-  .map(s => ({
-    ...s,
-    started_at: s.started_at || s.date || '',
-    updated_at: s.updated_at || s.date || '',
-  }))
-  .sort((a, b) => (b.updated_at || b.started_at).localeCompare(a.updated_at || a.started_at))
-  .map(s => {
-    const tk = s.tokens || { input: 0, output: 0, cache_write: 0, cache_read: 0 };
-    const acc = s.account || null;
-    return {
-    ...s,
-    _host: s.host || '',
-    _hostDotStyle: accountDotStyle('host:' + (s.host || '')),
-    _accKey: (acc && acc.email) || '',
-    _accEmail: (acc && acc.email) || 'untracked account',
-    _accPlan: (acc && acc.plan) || '',
-    _accDotStyle: accountDotStyle((acc && acc.email) || ''),
-    _search: [s.title, s.summary, s.topics, s.project, s.project_path, s.host || '',
-      (acc && acc.email) || '', (acc && acc.plan) || ''].join('\0').toLowerCase(),
-    _topics: s.topics.split(',').map(t => t.trim()).filter(Boolean),
-    _badgeClass: 'badge badge-' + s.status,
-    _msgLabel: s.messages + ' msgs',
-    _endPrefix: s.updated_at && s.updated_at !== s.started_at ? (s.status === 'completed' ? 'end' : 'latest') : '',
-    _isHidden: false,
-    _tok: {
-      in: formatTokens(tk.input),
-      out: formatTokens(tk.output),
-      cw: formatTokens(tk.cache_write),
-      cr: formatTokens(tk.cache_read),
-    },
-    _tokTotal: tk.input + tk.output + tk.cache_write + tk.cache_read,
-    _tokTitle:
-      'regular: ' + tk.input.toLocaleString() + ' in / ' + tk.output.toLocaleString() + ' out\n' +
-      'cached: ' + tk.cache_read.toLocaleString() + ' read / ' + tk.cache_write.toLocaleString() + ' write',
-  };
-  });
+// Pre-process sessions: apply the metadata overlay (user edits win over the
+// hook's analysis), sort (pinned first), build search index + derived fields.
+function buildSessions(rawList) {
+  return (rawList || [])
+    .map(s => ({
+      ...s,
+      started_at: s.started_at || s.date || '',
+      updated_at: s.updated_at || s.date || '',
+    }))
+    .map(s => {
+      const tk = s.tokens || { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+      const acc = s.account || null;
+      const m = s.meta || (window.SESSIONS_META && window.SESSIONS_META[s.id]) || {};
+      const title = m.title || s.title;
+      const summary = m.summary || s.summary;
+      const topics = m.topics || s.topics || '';
+      const status = m.status || s.status;
+      return {
+        ...s,
+        title, summary, topics, status,
+        summaries: s.summaries || [],
+        _orig: { title: s.title, summary: s.summary, topics: s.topics || '', status: s.status },
+        _note: m.note || '',
+        _pinned: !!m.pinned,
+        _archived: !!m.archived,
+        _deleted: !!m.deleted,
+        _host: s.host || '',
+        _hostDotStyle: accountDotStyle('host:' + (s.host || '')),
+        _accKey: (acc && acc.email) || '',
+        _accEmail: (acc && acc.email) || 'untracked account',
+        _accPlan: (acc && acc.plan) || '',
+        _accDotStyle: accountDotStyle((acc && acc.email) || ''),
+        _search: [title, summary, topics, s.project, s.project_path, s.host || '', m.note || '',
+          (acc && acc.email) || '', (acc && acc.plan) || ''].join('\0').toLowerCase(),
+        _topics: topics.split(',').map(t => t.trim()).filter(Boolean),
+        _badgeClass: 'badge badge-' + status,
+        _msgLabel: s.messages + ' msgs',
+        _endPrefix: s.updated_at && s.updated_at !== s.started_at ? (status === 'completed' ? 'end' : 'latest') : '',
+        _isHidden: false,
+        _tok: {
+          in: formatTokens(tk.input),
+          out: formatTokens(tk.output),
+          cw: formatTokens(tk.cache_write),
+          cr: formatTokens(tk.cache_read),
+        },
+        _tokTotal: tk.input + tk.output + tk.cache_write + tk.cache_read,
+        _tokTitle:
+          'regular: ' + tk.input.toLocaleString() + ' in / ' + tk.output.toLocaleString() + ' out\n' +
+          'cached: ' + tk.cache_read.toLocaleString() + ' read / ' + tk.cache_write.toLocaleString() + ' write',
+      };
+    })
+    .sort((a, b) =>
+      ((b._pinned ? 1 : 0) - (a._pinned ? 1 : 0)) ||
+      (b.updated_at || b.started_at).localeCompare(a.updated_at || a.started_at)
+    );
+}
 
-// Distinct accounts across all sessions (filter UI only shows for 2+)
-const _accounts = (() => {
-  const map = new Map();
-  for (const s of _raw) {
-    if (!map.has(s._accKey)) {
-      map.set(s._accKey, {
-        key: s._accKey,
-        email: s._accEmail,
-        plan: s._accPlan,
-        dotStyle: s._accDotStyle,
-        count: 0,
-      });
-    }
-    map.get(s._accKey).count++;
-  }
-  return Array.from(map.values()).sort((a, b) => b.count - a.count);
-})();
-const MULTI_ACCOUNT = _accounts.length >= 2;
-
-// Distinct machines across all sessions (chips only show for 2+)
-const _hosts = (() => {
-  const map = new Map();
-  for (const s of _raw) {
-    const key = s._host;
-    if (!map.has(key)) {
-      map.set(key, {
-        key,
-        name: key || 'unknown host',
-        dotStyle: s._hostDotStyle,
-        count: 0,
-      });
-    }
-    map.get(key).count++;
-  }
-  return Array.from(map.values()).sort((a, b) => b.count - a.count);
-})();
-const MULTI_HOST = _hosts.length >= 2;
-
-// blok has no lifecycle hook, so fetch the server config BEFORE mounting
-// and hand it over as initial state. Older/read-only servers may not allow
-// resume; default to copy-only.
 async function loadConfig() {
   if (!SERVER_MODE) return {};
   try {
@@ -454,22 +566,64 @@ async function loadConfig() {
   }
 }
 
-loadConfig().then(cfg => {
+async function fetchSessions() {
+  const r = await fetch('/api/sessions');
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return await r.json();
+}
+
+// One-time migration: hides stored in this browser's localStorage become
+// synced "archived" metadata once a server with editing is available.
+async function migrateLocalHidden(rawList, canEdit) {
+  const stored = loadHidden();
+  if (!canEdit || (!stored.sessions.length && !stored.projects.length)) return rawList;
+  const ids = new Set(stored.sessions);
+  const projects = new Set(stored.projects);
+  let migrated = 0;
+  for (const s of rawList) {
+    const m = s.meta || {};
+    if (m.archived) continue;
+    if (ids.has(s.id) || projects.has(s.project_path) || projects.has(s.project)) {
+      try { await postMeta(s.id, { archived: true }); migrated++; } catch (e) { return rawList; }
+    }
+  }
+  localStorage.removeItem(STORAGE_KEY);
+  if (!migrated) return rawList;
+  try { return await fetchSessions(); } catch (e) { return rawList; }
+}
+
+loadConfig().then(async cfg => {
+const canEdit = SERVER_MODE && !!cfg.edit;
+let initialRaw = window.SESSIONS_DATA || [];
+try { initialRaw = await migrateLocalHidden(initialRaw, canEdit); } catch (e) { /* keep initial */ }
+const stored = loadHidden();
+
 const app = blok.mount('#app', {
   state: {
-    sessions: _raw,
+    sessions: buildSessions(initialRaw),
     searchInput: '',
     search: '',
     showToast: false,
     toastMsg: '',
-    showHidden: false,
+    showArchived: false,
+    showDeleted: false,
     hiddenSessionIds: stored.sessions,
     hiddenProjectPaths: stored.projects,
     accountFilter: '__all__',
     hostFilter: '__all__',
+    statusFilter: '__all__',
     canResume: !!cfg.resume,
+    canEdit: canEdit,
     serverHost: cfg.host || '',
     remotes: cfg.remotes || {},
+    detailId: '',
+    pendingDelete: false,
+    editTitle: '',
+    editSummary: '',
+    editTopics: '',
+    editStatus: '',
+    editNote: '',
+    editPinned: false,
     tick: 0,
   },
 
@@ -484,18 +638,25 @@ const app = blok.mount('#app', {
     filtered() {
       const q = this.search.trim().toLowerCase();
       let result = this.sessions;
+      if (!this.showDeleted) result = result.filter(s => !s._deleted);
+      if (!this.showArchived) result = result.filter(s => !s._archived);
       if (this.accountFilter !== '__all__') {
         result = result.filter(s => s._accKey === this.accountFilter);
       }
       if (this.hostFilter !== '__all__') {
         result = result.filter(s => s._host === this.hostFilter);
       }
+      if (this.statusFilter !== '__all__') {
+        result = result.filter(s => s.status === this.statusFilter);
+      }
       if (q) {
         result = result.filter(s => s._search.includes(q));
       }
-      if (this.showHidden) return result;
+      if (this.canEdit) return result;
+      // Legacy per-browser hide (file:// or no-edit servers only)
       const hiddenIds = new Set(this.hiddenSessionIds);
       const hiddenPaths = new Set(this.hiddenProjectPaths);
+      if (this.showArchived) return result;
       return result.filter(s =>
         !hiddenIds.has(s.id) && !hiddenPaths.has(s.project_path)
       );
@@ -506,11 +667,10 @@ const app = blok.mount('#app', {
       // at a different absolute path on every machine.
       const map = new Map();
       const hiddenIds = new Set(this.hiddenSessionIds);
-      const hiddenKeys = new Set(this.hiddenProjectPaths);
       for (const s of this.filtered) {
         const key = s.project || s.project_path || 'unknown';
         if (!map.has(key)) map.set(key, { sessions: [], paths: new Set() });
-        s._isHidden = hiddenIds.has(s.id);
+        s._isHidden = s._archived || (!this.canEdit && hiddenIds.has(s.id));
         s._startLabel = 'start: ' + relativeTime(s.started_at);
         s._endLabel = s._endPrefix ? s._endPrefix + ': ' + relativeTime(s.updated_at) : '';
         const g = map.get(key);
@@ -521,23 +681,79 @@ const app = blok.mount('#app', {
         projectPath: key,
         pathsTitle: Array.from(g.paths).join('\n') || key,
         sessions: g.sessions,
-        // Back-compat: previously hidden entries stored the absolute path
-        hidden: hiddenKeys.has(key) || Array.from(g.paths).some(p => hiddenKeys.has(p)),
       }));
     },
     accounts() {
-      if (!MULTI_ACCOUNT) return [];
-      return _accounts.map(a => ({ ...a, active: a.key === this.accountFilter }));
+      const map = new Map();
+      for (const s of this.sessions) {
+        if (s._deleted) continue;
+        if (!map.has(s._accKey)) {
+          map.set(s._accKey, { key: s._accKey, email: s._accEmail, plan: s._accPlan, dotStyle: s._accDotStyle, count: 0 });
+        }
+        map.get(s._accKey).count++;
+      }
+      if (map.size < 2) return [];
+      return Array.from(map.values()).sort((a, b) => b.count - a.count)
+        .map(a => ({ ...a, active: a.key === this.accountFilter }));
     },
     hosts() {
-      if (!MULTI_HOST) return [];
-      return _hosts.map(h => ({ ...h, active: h.key === this.hostFilter }));
+      const map = new Map();
+      for (const s of this.sessions) {
+        if (s._deleted) continue;
+        if (!map.has(s._host)) {
+          map.set(s._host, { key: s._host, name: s._host || 'unknown host', dotStyle: s._hostDotStyle, count: 0 });
+        }
+        map.get(s._host).count++;
+      }
+      if (map.size < 2) return [];
+      return Array.from(map.values()).sort((a, b) => b.count - a.count)
+        .map(h => ({ ...h, active: h.key === this.hostFilter }));
+    },
+    statuses() {
+      const map = new Map();
+      for (const s of this.sessions) {
+        if (s._deleted || s._archived) continue;
+        map.set(s.status, (map.get(s.status) || 0) + 1);
+      }
+      if (map.size < 2) return [];
+      return Array.from(map, ([key, count]) => ({
+        key, count,
+        badgeClass: 'badge badge-' + key,
+        active: key === this.statusFilter,
+      })).sort((a, b) => b.count - a.count);
+    },
+    archivedCount() {
+      if (this.canEdit) return this.sessions.filter(s => s._archived && !s._deleted).length;
+      return this.hiddenSessionIds.length + this.hiddenProjectPaths.length;
+    },
+    deletedCount() {
+      return this.sessions.filter(s => s._deleted).length;
+    },
+    detail() {
+      if (!this.detailId) return null;
+      return this.sessions.find(s => s.id === this.detailId) || null;
+    },
+    detailOpen() {
+      return !!this.detail;
+    },
+    archiveBtnText() {
+      return this.detail && this.detail._archived ? 'Unarchive' : 'Archive';
+    },
+    deleteBtnText() {
+      return this.pendingDelete ? 'Confirm delete?' : 'Delete';
+    },
+    origTitleHint() {
+      const d = this.detail;
+      return d && d.title !== d._orig.title ? 'original: ' + d._orig.title : '';
+    },
+    editStatuses() {
+      return ['completed', 'in-progress', 'exploring', 'debugging'].map(k => ({
+        key: k,
+        active: this.editStatus === k,
+      }));
     },
     resumeHint() {
       return this.canResume ? 'Resume this session in a new terminal' : '';
-    },
-    hiddenCount() {
-      return this.hiddenSessionIds.length + this.hiddenProjectPaths.length;
     },
     statsText() {
       const s = this.filtered.length;
@@ -545,8 +761,11 @@ const app = blok.mount('#app', {
       return s + ' session' + (s !== 1 ? 's' : '') + (this.search ? ' matching' : '') +
         ' in ' + g + ' project' + (g !== 1 ? 's' : '');
     },
-    hiddenBtnText() {
-      return (this.showHidden ? 'hide' : 'show') + ' ' + this.hiddenCount + ' hidden';
+    archivedBtnText() {
+      return (this.showArchived ? 'hide' : 'show') + ' ' + this.archivedCount + ' archived';
+    },
+    deletedBtnText() {
+      return (this.showDeleted ? 'hide' : 'show') + ' ' + this.deletedCount + ' deleted';
     },
     tokensText() {
       let inp = 0, out = 0, cw = 0, cr = 0;
@@ -560,14 +779,132 @@ const app = blok.mount('#app', {
   },
 
   methods: {
-    toggleHidden() {
-      this.showHidden = !this.showHidden;
+    toggleArchived() {
+      this.showArchived = !this.showArchived;
+    },
+    toggleDeleted() {
+      this.showDeleted = !this.showDeleted;
     },
     setAccount(key) {
       this.accountFilter = this.accountFilter === key ? '__all__' : key;
     },
     setHost(key) {
       this.hostFilter = this.hostFilter === key ? '__all__' : key;
+    },
+    setStatus(key) {
+      this.statusFilter = this.statusFilter === key ? '__all__' : key;
+    },
+    setEditStatus(key) {
+      this.editStatus = key;
+    },
+    noop() { /* click.stop anchor for the modal panel */ },
+    _toast(msg, ms) {
+      this.toastMsg = msg;
+      this.showToast = true;
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => { this.showToast = false; }, ms || 1500);
+    },
+    async reloadData() {
+      try {
+        const raw = await fetchSessions();
+        this.sessions = buildSessions(raw);
+      } catch (e) {
+        this._toast('Reload failed: ' + e.message, 3000);
+      }
+    },
+    async _patch(id, patch, okMsg) {
+      try {
+        const res = await postMeta(id, patch);
+        if (res.ok) {
+          if (okMsg) this._toast(okMsg);
+          await this.reloadData();
+        } else {
+          this._toast('Error: ' + (res.error || 'unknown'), 3500);
+        }
+      } catch (e) {
+        this._toast('Server error: ' + e.message, 3500);
+      }
+    },
+    hideSession(id) {
+      if (this.canEdit) {
+        this._patch(id, { archived: true }, 'Archived');
+        return;
+      }
+      if (this.hiddenSessionIds.includes(id)) return;
+      this.hiddenSessionIds = [...this.hiddenSessionIds, id];
+      saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
+    },
+    restoreSession(id) {
+      if (this.canEdit) {
+        this._patch(id, { archived: null }, 'Restored');
+        return;
+      }
+      this.hiddenSessionIds = this.hiddenSessionIds.filter(x => x !== id);
+      saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
+    },
+    async hideProject(group) {
+      if (this.canEdit) {
+        for (const s of group.sessions) {
+          if (!s._archived) await postMeta(s.id, { archived: true }).catch(() => {});
+        }
+        this._toast('Project archived');
+        await this.reloadData();
+        return;
+      }
+      const path = group.pathsTitle.split('\n')[0] || group.projectPath;
+      if (this.hiddenProjectPaths.includes(path)) return;
+      this.hiddenProjectPaths = [...this.hiddenProjectPaths, path];
+      saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
+    },
+    openDetail(s) {
+      this.detailId = s.id;
+      this.pendingDelete = false;
+      this.editTitle = s.title;
+      this.editSummary = s.summary;
+      this.editTopics = s.topics;
+      this.editStatus = s.status;
+      this.editNote = s._note;
+      this.editPinned = s._pinned;
+    },
+    closeDetail() {
+      this.detailId = '';
+      this.pendingDelete = false;
+    },
+    togglePin() {
+      this.editPinned = !this.editPinned;
+    },
+    async saveDetail() {
+      const s = this.detail;
+      if (!s || !this.canEdit) return;
+      const patch = {};
+      patch.title = this.editTitle !== s._orig.title ? this.editTitle : null;
+      patch.summary = this.editSummary !== s._orig.summary ? this.editSummary : null;
+      patch.topics = this.editTopics !== s._orig.topics ? this.editTopics : null;
+      patch.status = this.editStatus !== s._orig.status ? this.editStatus : null;
+      patch.note = this.editNote || null;
+      patch.pinned = this.editPinned || null;
+      await this._patch(s.id, patch, 'Saved');
+      this.closeDetail();
+    },
+    async archiveFromDetail() {
+      const s = this.detail;
+      if (!s) return;
+      await this._patch(s.id, { archived: s._archived ? null : true }, s._archived ? 'Restored' : 'Archived');
+      this.closeDetail();
+    },
+    async deleteFromDetail() {
+      const s = this.detail;
+      if (!s) return;
+      if (!this.pendingDelete) {
+        this.pendingDelete = true;
+        this._toast('Click again to confirm delete', 2500);
+        return;
+      }
+      await this._patch(s.id, { deleted: true }, 'Deleted (restorable via "show deleted")');
+      this.closeDetail();
+    },
+    async restoreDeleted(id) {
+      await this._patch(id, { deleted: null }, 'Restored');
     },
     _isRemote(s) {
       return !!(s._host && this.serverHost && s._host !== this.serverHost);
@@ -586,12 +923,6 @@ const app = blok.mount('#app', {
         this._fallbackCopy(cmd);
       }
       this._toast('Session from "' + (remote.label || s._host) + '" - command copied', 2500);
-    },
-    _toast(msg, ms) {
-      this.toastMsg = msg;
-      this.showToast = true;
-      clearTimeout(this._toastTimer);
-      this._toastTimer = setTimeout(() => { this.showToast = false; }, ms || 1500);
     },
     async resumeSession(s) {
       if (!this.canResume) return;
@@ -617,24 +948,6 @@ const app = blok.mount('#app', {
         this._toast('Server error: ' + e.message, 3500);
       }
     },
-    hideSession(id) {
-      if (this.hiddenSessionIds.includes(id)) return;
-      this.hiddenSessionIds = [...this.hiddenSessionIds, id];
-      saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
-    },
-    restoreSession(id) {
-      this.hiddenSessionIds = this.hiddenSessionIds.filter(x => x !== id);
-      saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
-    },
-    hideProject(path) {
-      if (this.hiddenProjectPaths.includes(path)) return;
-      this.hiddenProjectPaths = [...this.hiddenProjectPaths, path];
-      saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
-    },
-    restoreProject(path) {
-      this.hiddenProjectPaths = this.hiddenProjectPaths.filter(x => x !== path);
-      saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
-    },
     copyResume(session) {
       // For sessions from another machine with a configured remote command,
       // copy that instead of a local cd that wouldn't exist here.
@@ -649,6 +962,16 @@ const app = blok.mount('#app', {
         this._fallbackCopy(cmd);
       }
       this._toast('Copied to clipboard!');
+    },
+    copyId() {
+      const s = this.detail;
+      if (!s) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(s.id).catch(() => this._fallbackCopy(s.id));
+      } else {
+        this._fallbackCopy(s.id);
+      }
+      this._toast('Session id copied');
     },
     _fallbackCopy(text) {
       const ta = document.createElement('textarea');
@@ -669,91 +992,103 @@ const app = blok.mount('#app', {
         { div: { class: 'header-row', children: [
           { span: { class: 'stats', text: $.statsText } },
           { span: { class: 'stats', text: $.tokensText } },
-          { when: $.hiddenCount, children: [
+          { when: $.archivedCount, children: [
             { button: {
-              class: ['toggle-hidden', { active: $.showHidden }],
-              click: 'toggleHidden',
-              text: $.hiddenBtnText,
+              class: ['toggle-hidden', { active: $.showArchived }],
+              click: 'toggleArchived',
+              text: $.archivedBtnText,
+            }},
+          ]},
+          { when: $.deletedCount, children: [
+            { button: {
+              class: ['toggle-hidden', { active: $.showDeleted }],
+              click: 'toggleDeleted',
+              text: $.deletedBtnText,
             }},
           ]},
           ...(SERVER_MODE ? [] : [
             { span: {
               class: 'serve-hint',
-              bind: { title: 'Serve the UI locally to resume sessions by clicking their card' },
-              text: 'tip: bun ~/.claude/session-tracker/serve.ts → click a card to resume it in a terminal',
+              bind: { title: 'Serve the UI locally to resume, edit, archive and delete sessions' },
+              text: 'tip: bun ~/.claude/session-tracker/serve.ts → resume/edit sessions from here',
             }},
           ]),
         ]}},
-        ...(MULTI_ACCOUNT || MULTI_HOST ? [
+        { when: $.hosts.length, children: [
           { div: { class: 'header-row', children: [
-            ...(MULTI_HOST ? [
-              { each: $.hosts, as: 'h', key: 'key', children: [
-                { button: {
-                  class: ['account-chip', { active: $.h.active }],
-                  click: 'setHost(h.key)',
-                  bind: { title: 'Filter sessions by machine' },
-                  children: [
-                    { span: { class: 'account-dot', bind: { style: $.h.dotStyle } } },
-                    { span: { text: $.h.name } },
-                    { span: { class: 'group-count', text: $.h.count } },
-                  ],
-                }},
-              ]},
-            ] : []),
-            ...(MULTI_ACCOUNT ? [
-              { each: $.accounts, as: 'acc', key: 'key', children: [
-                { button: {
-                  class: ['account-chip', { active: $.acc.active }],
-                  click: 'setAccount(acc.key)',
-                  bind: { title: 'Filter sessions by this account' },
-                  children: [
-                    { span: { class: 'account-dot', bind: { style: $.acc.dotStyle } } },
-                    { span: { text: $.acc.email } },
-                    { when: $.acc.plan, children: [
-                      { span: { class: 'account-plan', text: $.acc.plan } },
-                    ]},
-                    { span: { class: 'group-count', text: $.acc.count } },
-                  ],
-                }},
-              ]},
-            ] : []),
+            { each: $.hosts, as: 'h', key: 'key', children: [
+              { button: {
+                class: ['account-chip', { active: $.h.active }],
+                click: 'setHost(h.key)',
+                bind: { title: 'Filter sessions by machine' },
+                children: [
+                  { span: { class: 'account-dot', bind: { style: $.h.dotStyle } } },
+                  { span: { text: $.h.name } },
+                  { span: { class: 'group-count', text: $.h.count } },
+                ],
+              }},
+            ]},
           ]}},
-        ] : []),
+        ]},
+        { when: $.accounts.length, children: [
+          { div: { class: 'header-row', children: [
+            { each: $.accounts, as: 'acc', key: 'key', children: [
+              { button: {
+                class: ['account-chip', { active: $.acc.active }],
+                click: 'setAccount(acc.key)',
+                bind: { title: 'Filter sessions by this account' },
+                children: [
+                  { span: { class: 'account-dot', bind: { style: $.acc.dotStyle } } },
+                  { span: { text: $.acc.email } },
+                  { when: $.acc.plan, children: [
+                    { span: { class: 'account-plan', text: $.acc.plan } },
+                  ]},
+                  { span: { class: 'group-count', text: $.acc.count } },
+                ],
+              }},
+            ]},
+          ]}},
+        ]},
+        { when: $.statuses.length, children: [
+          { div: { class: 'header-row', children: [
+            { each: $.statuses, as: 'st', key: 'key', children: [
+              { button: {
+                class: ['account-chip', { active: $.st.active }],
+                click: 'setStatus(st.key)',
+                bind: { title: 'Filter sessions by status' },
+                children: [
+                  { span: { class: $.st.badgeClass, text: $.st.key } },
+                  { span: { class: 'group-count', text: $.st.count } },
+                ],
+              }},
+            ]},
+          ]}},
+        ]},
         { input: {
           class: 'search-box',
           type: 'text',
-          bind: { placeholder: 'Search sessions by title, summary, topics, or project...' },
+          bind: { placeholder: 'Search sessions by title, summary, topics, notes, project, machine...' },
           model: $.searchInput,
         }},
       ]}},
 
       { div: { class: 'groups', children: [
         { each: $.grouped, as: 'group', key: 'projectPath', children: [
-          { div: { class: { group: true, 'group-hidden': $.group.hidden }, children: [
+          { div: { class: 'group', children: [
             { div: { class: 'group-header', children: [
               { span: { class: 'group-path', bind: { title: $.group.pathsTitle }, text: $.group.projectPath } },
               { span: { class: 'group-count', text: $.group.sessions.length } },
-              { when: $.group.hidden, children: [
-                { button: {
-                  class: 'restore-btn',
-                  click: 'restoreProject(group.projectPath)',
-                  bind: { title: 'Restore project' },
-                  text: 'restore',
-                }},
-              ]},
-              { when: $.not.group.hidden, children: [
-                { button: {
-                  class: 'hide-btn',
-                  click: 'hideProject(group.projectPath)',
-                  bind: { title: 'Hide project' },
-                  text: 'hide',
-                }},
-              ]},
+              { button: {
+                class: 'hide-btn',
+                'click.stop': 'hideProject(group)',
+                bind: { title: 'Archive all sessions in this project' },
+                text: 'hide',
+              }},
             ]}},
             { div: { class: 'cards', children: [
               { each: $.group.sessions, as: 's', key: 'id', children: [
                 { div: {
-                  class: { card: true, 'card-hidden': $.s._isHidden, 'card-clickable': $.canResume },
+                  class: { card: true, 'card-hidden': $.s._isHidden, 'card-deleted': $.s._deleted, 'card-clickable': $.canResume },
                   ...(SERVER_MODE
                     ? { click: 'resumeSession(s)', bind: { title: $.resumeHint } }
                     : {}),
@@ -766,25 +1101,32 @@ const app = blok.mount('#app', {
                       ]},
                     ]}},
                     { div: { class: 'card-meta', children: [
-                      ...(MULTI_HOST ? [
+                      { when: $.hosts.length, children: [
                         { span: { class: 'card-account', bind: { title: 'Machine this session ran on' }, children: [
                           { span: { class: 'account-dot', bind: { style: $.s._hostDotStyle } } },
                           { span: { text: $.s._host } },
                         ]}},
-                      ] : []),
-                      ...(MULTI_ACCOUNT ? [
+                      ]},
+                      { when: $.accounts.length, children: [
                         { span: { class: 'card-account', bind: { title: $.s._accEmail }, children: [
                           { span: { class: 'account-dot', bind: { style: $.s._accDotStyle } } },
                           { span: { text: $.s._accPlan } },
                         ]}},
-                      ] : []),
+                      ]},
                       { span: { text: $.s.branch } },
                       { span: { text: $.s._msgLabel } },
                       { span: { class: $.s._badgeClass, text: $.s.status } },
                     ]}},
                   ]}},
-                  { div: { class: 'card-title', text: $.s.title } },
+                  { div: { class: 'card-title', 'click.stop': 'openDetail(s)',
+                      bind: { title: 'Open details / edit' }, children: [
+                    { when: $.s._pinned, children: [ { span: { class: 'card-pin', text: '★' } } ]},
+                    { span: { text: $.s.title } },
+                  ]}},
                   { div: { class: 'card-summary', text: $.s.summary } },
+                  { when: $.s._note, children: [
+                    { div: { class: 'card-note', text: $.s._note } },
+                  ]},
                   { div: { class: 'card-tokens', bind: { title: $.s._tokTitle }, children: [
                     { span: { children: [
                       { span: { class: 'tok-label', text: 'in ' } },
@@ -810,20 +1152,35 @@ const app = blok.mount('#app', {
                       ]},
                     ]}},
                     { div: { class: 'card-actions', children: [
-                      { when: $.s._isHidden, children: [
+                      { when: $.s._deleted, children: [
                         { button: {
                           class: 'restore-btn',
-                          'click.stop': 'restoreSession(s.id)',
+                          'click.stop': 'restoreDeleted(s.id)',
                           text: 'restore',
                         }},
                       ]},
-                      { when: $.not.s._isHidden, children: [
-                        { button: {
-                          class: 'hide-btn',
-                          'click.stop': 'hideSession(s.id)',
-                          text: 'hide',
-                        }},
+                      { when: $.not.s._deleted, children: [
+                        { when: $.s._isHidden, children: [
+                          { button: {
+                            class: 'restore-btn',
+                            'click.stop': 'restoreSession(s.id)',
+                            text: 'restore',
+                          }},
+                        ]},
+                        { when: $.not.s._isHidden, children: [
+                          { button: {
+                            class: 'hide-btn',
+                            'click.stop': 'hideSession(s.id)',
+                            text: 'hide',
+                          }},
+                        ]},
                       ]},
+                      { button: {
+                        class: 'resume-btn',
+                        'click.stop': 'openDetail(s)',
+                        bind: { title: 'Details / edit' },
+                        text: 'details',
+                      }},
                       { button: {
                         class: 'resume-btn',
                         'click.stop': 'copyResume(s)',
@@ -843,15 +1200,83 @@ const app = blok.mount('#app', {
         ]},
       ]}},
 
+      { when: $.detailOpen, children: [
+        { div: { class: 'modal-overlay', click: 'closeDetail', children: [
+          { div: { class: 'modal', 'click.stop': 'noop', children: [
+            { h2: { text: $.detail.title } },
+            { div: { class: 'modal-info', children: [
+              { span: { class: 'k', text: 'machine' } },   { span: { text: $.detail._host } },
+              { span: { class: 'k', text: 'project' } },   { span: { text: $.detail.project_path } },
+              { span: { class: 'k', text: 'branch' } },    { span: { text: $.detail.branch } },
+              { span: { class: 'k', text: 'started' } },   { span: { text: $.detail.started_at } },
+              { span: { class: 'k', text: 'updated' } },   { span: { text: $.detail.updated_at } },
+              { span: { class: 'k', text: 'messages' } },  { span: { text: $.detail._msgLabel } },
+              { span: { class: 'k', text: 'account' } },   { span: { text: $.detail._accEmail } },
+              { span: { class: 'k', text: 'tokens' } },    { span: { text: $.detail._tokTitle } },
+              { span: { class: 'k', text: 'id' } },        { span: { text: $.detail.id } },
+            ]}},
+
+            { when: $.canEdit, children: [
+              { span: { class: 'edit-label', text: 'Title' } },
+              { input: { class: 'edit-input', type: 'text', model: $.editTitle } },
+              { when: $.origTitleHint, children: [
+                { div: { class: 'edit-orig', text: $.origTitleHint } },
+              ]},
+              { span: { class: 'edit-label', text: 'Summary' } },
+              { textarea: { class: 'edit-area', model: $.editSummary } },
+              { span: { class: 'edit-label', text: 'Topics (comma-separated)' } },
+              { input: { class: 'edit-input', type: 'text', model: $.editTopics } },
+              { span: { class: 'edit-label', text: 'Status' } },
+              { div: { class: 'modal-actions', children: [
+                { each: $.editStatuses, as: 'es', key: 'key', children: [
+                  { button: { class: ['btn', { active: $.es.active }], 'click.stop': 'setEditStatus(es.key)', text: $.es.key } },
+                ]},
+              ]}},
+              { span: { class: 'edit-label', text: 'Note (yours, searchable)' } },
+              { textarea: { class: 'edit-area', model: $.editNote } },
+            ]},
+
+            { when: $.detail.summaries.length, children: [
+              { span: { class: 'edit-label', text: 'Incremental summaries' } },
+              { ul: { class: 'modal-summaries', children: [
+                { each: $.detail.summaries, as: 'sm', children: [
+                  { li: { text: $.sm } },
+                ]},
+              ]}},
+            ]},
+
+            { div: { class: 'modal-actions', children: [
+              { when: $.canEdit, children: [
+                { button: { class: 'btn primary', 'click.stop': 'saveDetail', text: 'Save' } },
+                { button: { class: ['btn', 'warn', { active: $.editPinned }], 'click.stop': 'togglePin', text: '★ pin' } },
+                { button: { class: 'btn', 'click.stop': 'archiveFromDetail', text: $.archiveBtnText } },
+                { button: { class: ['btn', 'danger', { active: $.pendingDelete }], 'click.stop': 'deleteFromDetail',
+                    text: $.deleteBtnText } },
+              ]},
+              { span: { class: 'spacer' } },
+              { button: { class: 'btn', 'click.stop': 'copyId', text: 'Copy id' } },
+              { button: { class: 'btn', 'click.stop': 'copyResume(detail)', text: 'Copy resume' } },
+              { button: { class: 'btn', 'click.stop': 'closeDetail', text: 'Close' } },
+            ]}},
+          ]}},
+        ]}},
+      ]},
+
       { div: { class: ['copied-toast', { show: $.showToast }], text: $.toastMsg } },
     ]},
   }),
 });
 
-// Refresh relative times every minute (no-op if mount doesn't return state)
+// Refresh relative times every minute; in server mode also re-fetch the data
+// (new sessions and edits made from other browsers/machines appear alone).
 try {
   if (app && typeof app.tick === 'number') {
-    setInterval(() => { app.tick++; }, 60000);
+    setInterval(() => {
+      app.tick++;
+      if (SERVER_MODE && typeof app.reloadData === 'function' && !app.detailOpen) {
+        app.reloadData();
+      }
+    }, 60000);
   }
 } catch (e) { /* ignore */ }
 });
