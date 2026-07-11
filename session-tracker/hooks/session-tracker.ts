@@ -191,8 +191,12 @@ export function otherHostFiles(): string[] {
 export async function loadSessions(): Promise<Session[]> {
   const own = await loadSessionsFrom(HOST_JS_FILE);
   if (own.length > 0) return own;
-  // Migration: adopt the legacy file's sessions as ours (stamping host)
-  const legacy = await loadSessionsFrom(SESSIONS_JS_FILE);
+  // Migration: adopt the legacy file's sessions as ours (stamping host).
+  // Skip sessions already stamped with another machine's name - on
+  // multi-machine setups the legacy file may be a copy from another host,
+  // and adopting those would duplicate them into this host's file.
+  const legacy = (await loadSessionsFrom(SESSIONS_JS_FILE))
+    .filter(s => !s.host || s.host === HOST);
   for (const s of legacy) if (!s.host) s.host = HOST;
   return legacy;
 }
@@ -390,7 +394,14 @@ export async function buildConversationText(
 async function callCli(prompt: string): Promise<SummaryResult> {
   const proc = Bun.spawn(
     ["claude", "-p", "--model", "haiku", "--no-session-persistence"],
-    { stdin: new Blob([prompt]), stdout: "pipe", stderr: "pipe" }
+    {
+      stdin: new Blob([prompt]),
+      stdout: "pipe",
+      stderr: "pipe",
+      // Mark the subprocess so its own Stop/SessionEnd hooks (this script,
+      // registered globally) exit immediately instead of tracking it.
+      env: { ...process.env, SESSION_TRACKER_NESTED: "1" },
+    }
   );
 
   const [stdout, exitCode] = await Promise.all([
@@ -618,12 +629,65 @@ function provisionWebUI(): void {
 
 // -- Main --
 
+/**
+ * Detach the SessionEnd processor so Claude Code's shutdown isn't blocked.
+ * POSIX: shell background job. Windows: WMI Win32_Process.Create - Bun kills
+ * plain child processes when the parent exits, but a WMI-created process
+ * belongs to the WMI service, outside our process tree. Returns false when
+ * detaching failed and the caller should process inline instead.
+ */
+function spawnDetachedFinal(scriptPath: string, inputFile: string, logFile: string): boolean {
+  try {
+    if (process.platform === "win32") {
+      // A WMI-created process doesn't inherit our environment, so re-export
+      // the vars that pick the data dir (also keeps cmd /c from applying its
+      // quote-stripping rule, since the line no longer starts with a quote).
+      let envPrefix = `set "SESSION_TRACKER_DIR=${BASE_DIR}"&& `;
+      if (process.env.SESSION_TRACKER_HOSTNAME) {
+        envPrefix += `set "SESSION_TRACKER_HOSTNAME=${process.env.SESSION_TRACKER_HOSTNAME}"&& `;
+      }
+      const cmdLine = `cmd /c ${envPrefix}"${process.execPath}" "${scriptPath}" --final-bg "${inputFile}" >> "${logFile}" 2>&1`;
+      const psArg = "'" + cmdLine.replace(/'/g, "''") + "'";
+      const proc = Bun.spawnSync([
+        "powershell", "-NoProfile", "-NonInteractive", "-Command",
+        `(Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${psArg} }).ReturnValue`,
+      ]);
+      return proc.exitCode === 0 && proc.stdout.toString().trim() === "0";
+    }
+    Bun.spawn([
+      "sh", "-c",
+      `bun "${scriptPath}" --final-bg "${inputFile}" </dev/null >>"${logFile}" 2>&1 &`,
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Delete final-*.json inputs older than a day (orphans from failed detaches). */
+function sweepStaleFinalInputs(): void {
+  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  try {
+    for (const f of readdirSync(BASE_DIR)) {
+      const m = /^final-(\d+)\.json$/.exec(f);
+      if (m && Number(m[1]) < dayAgo) {
+        try { unlinkSync(join(BASE_DIR, f)); } catch { /* in use */ }
+      }
+    }
+  } catch { /* no data dir yet */ }
+}
+
 async function main(): Promise<void> {
+  // Session spawned by this very hook (summary CLI call): don't track it.
+  if (process.env.SESSION_TRACKER_NESTED) process.exit(0);
+
   provisionWebUI();
 
   const isFinal = process.argv.includes("--final");
   const finalBgIdx = process.argv.indexOf("--final-bg");
-  const isFinalBg = finalBgIdx !== -1;
+  let isFinalBg = finalBgIdx !== -1;
+
+  let hookInput: HookInput;
 
   // SessionEnd: save input and fork to a detached background process,
   // then exit immediately so Claude Code's shutdown isn't blocked.
@@ -632,18 +696,22 @@ async function main(): Promise<void> {
     const inputText = await Bun.stdin.text();
     const inputFile = join(BASE_DIR, `final-${Date.now()}.json`);
     await Bun.write(inputFile, inputText);
-    const scriptPath = import.meta.filename;
+    sweepStaleFinalInputs();
     const logFile = join(BASE_DIR, "session-end.log");
-    Bun.spawn([
-      "sh", "-c",
-      `bun "${scriptPath}" --final-bg "${inputFile}" </dev/null >>"${logFile}" 2>&1 &`,
-    ]);
-    process.exit(0);
-  }
-
-  // Read hook input: from temp file (detached) or stdin (normal Stop hook)
-  let hookInput: HookInput;
-  if (isFinalBg) {
+    if (spawnDetachedFinal(import.meta.filename, inputFile, logFile)) {
+      process.exit(0);
+    }
+    // Couldn't detach: process inline. Blocks shutdown for one summary
+    // call, but the final is never silently dropped.
+    try {
+      hookInput = JSON.parse(inputText);
+      unlinkSync(inputFile);
+    } catch {
+      process.exit(0);
+    }
+    isFinalBg = true;
+  } else if (isFinalBg) {
+    // Read hook input from the temp file written by --final
     const inputFile = process.argv[finalBgIdx + 1];
     try {
       hookInput = JSON.parse(await Bun.file(inputFile).text());
@@ -652,6 +720,7 @@ async function main(): Promise<void> {
       process.exit(0);
     }
   } else {
+    // Normal Stop hook: input on stdin
     hookInput = await readHookInput();
   }
 

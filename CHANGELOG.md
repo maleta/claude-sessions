@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.2.1] - 2026-07-11
+
+### SessionEnd processing fixed on Windows
+
+The detached SessionEnd processor was launched through `sh -c "... &"`, which
+doesn't exist on a stock Windows PATH: the spawn threw, the queued
+`final-<ts>.json` input was never processed, and sessions never received their
+consolidated final summary or `completed` status. Fixed with a
+platform-specific detach: POSIX keeps the shell background job; Windows creates
+the processor via WMI `Win32_Process.Create` (Bun kills plain children when the
+parent exits, and a WMI-created process lives outside our process tree), with
+the data-dir env vars re-exported on the command line since WMI children don't
+inherit the environment. If detaching fails, the hook now processes the final
+inline (blocking shutdown briefly) rather than silently dropping it, and
+orphaned `final-*.json` inputs older than a day are swept on session end.
+
+### No more self-tracking of summary subprocesses
+
+The hook's own `claude -p` summary calls fire the globally-registered hooks in
+turn, leaving ghost `final-*.json` inputs behind on every analysis. Those
+subprocesses are now marked with `SESSION_TRACKER_NESTED=1` and the hook exits
+immediately when it sees the marker.
+
+### Legacy migration respects other hosts
+
+First-run migration of the legacy `sessions-data.js` adopted *every* session
+into the local host's file, including sessions stamped with another machine's
+name (easy to hit by copying a data dir to a second machine for the viewer).
+It now only adopts sessions with no host or its own.
+
 ## [1.2.0] - 2026-07-11
 
 ### Per-model token tracking & session cost
