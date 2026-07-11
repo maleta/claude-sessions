@@ -8,15 +8,28 @@
  * - On session end: consolidates all incremental summaries into a final one
  */
 
-import { mkdirSync, statSync, copyFileSync, unlinkSync } from "fs";
-import { homedir } from "os";
+import { mkdirSync, statSync, copyFileSync, unlinkSync, readdirSync } from "fs";
+import { homedir, hostname } from "os";
 import { join, basename } from "path";
 
-const BASE_DIR = join(homedir(), ".claude", "session-tracker");
-const SESSIONS_JS_FILE = join(BASE_DIR, "sessions-data.js");
+export const BASE_DIR = process.env.SESSION_TRACKER_DIR
+  ?? join(homedir(), ".claude", "session-tracker");
+
+/** Sanitized machine name: filename-safe, stable across runs. */
+export function sanitizeHost(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "") || "unknown";
+}
+export const HOST = sanitizeHost(process.env.SESSION_TRACKER_HOSTNAME ?? hostname());
+
+// One data file per machine: multi-machine setups sync the data dir and every
+// machine only ever writes its own file, so the sync never sees two writers.
+const SESSIONS_JS_FILE = join(BASE_DIR, "sessions-data.js"); // legacy / single-host merged
+const HOST_JS_FILE = join(BASE_DIR, `sessions-data.${HOST}.js`);
 const SUMMARIES_FILENAME = "SESSION_SUMMARIES.md";
 const WEB_UI_SOURCE = join(import.meta.dir, "..", "web", "index.html");
 const WEB_UI_TARGET = join(BASE_DIR, "index.html");
+const SERVER_SOURCE = join(import.meta.dir, "..", "server", "serve.ts");
+const SERVER_TARGET = join(BASE_DIR, "serve.ts");
 
 const FIRST_THRESHOLD = 1;
 const RE_ANALYSIS_INTERVAL = 5;
@@ -50,14 +63,26 @@ Return ONLY valid JSON, nothing else.`;
 
 // -- Types --
 
-interface TokenUsage {
+export interface TokenUsage {
   input: number;        // uncached input tokens (full price)
   output: number;       // output tokens
   cache_write: number;  // cache_creation_input_tokens
   cache_read: number;   // cache_read_input_tokens (cache hits)
 }
 
-interface Session {
+export interface UsageBreakdown {
+  totals: TokenUsage;
+  /** Per-model usage, keyed by the raw model id from the transcript. */
+  models: Record<string, TokenUsage>;
+}
+
+export interface AccountInfo {
+  uuid: string;
+  email: string;
+  plan: string;
+}
+
+export interface Session {
   id: string;
   started_at: string;
   updated_at: string;
@@ -74,6 +99,9 @@ interface Session {
   analysis_count: number;
   summaries: string[];
   tokens: TokenUsage;
+  models: Record<string, TokenUsage>;
+  account: AccountInfo | null;
+  host: string;
 }
 
 interface HookInput {
@@ -83,7 +111,7 @@ interface HookInput {
   session_end_reason?: string;
 }
 
-interface SummaryResult {
+export interface SummaryResult {
   title?: string;
   summary?: string;
   topics?: string;
@@ -107,6 +135,7 @@ interface TranscriptEntry {
   message?: {
     id?: string;
     role?: string;
+    model?: string;
     content?: string | ContentBlock[];
     usage?: Usage;
   };
@@ -114,36 +143,76 @@ interface TranscriptEntry {
 
 // -- Data I/O --
 
-async function loadSessions(): Promise<Session[]> {
-  const file = Bun.file(SESSIONS_JS_FILE);
-  if (await file.exists()) {
-    try {
-      const text = await file.text();
-      const jsonStr = text.replace("window.SESSIONS_DATA = ", "").trimEnd().replace(/;$/, "");
-      const sessions: Session[] = JSON.parse(jsonStr);
-      for (const s of sessions) {
-        // Migrate old format: date -> started_at + updated_at
-        const legacy = s as Record<string, unknown>;
-        if (legacy.date && !s.started_at) {
-          s.started_at = legacy.date as string;
-          s.updated_at = legacy.date as string;
-          delete legacy.date;
-        }
-        if (!s.summaries) s.summaries = [];
-        if (!s.tokens) s.tokens = { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+export function parseSessionsJs(text: string): Session[] {
+  try {
+    const jsonStr = text.replace("window.SESSIONS_DATA = ", "").trimEnd().replace(/;$/, "");
+    const sessions: Session[] = JSON.parse(jsonStr);
+    for (const s of sessions) {
+      // Migrate old format: date -> started_at + updated_at
+      const legacy = s as Record<string, unknown>;
+      if (legacy.date && !s.started_at) {
+        s.started_at = legacy.date as string;
+        s.updated_at = legacy.date as string;
+        delete legacy.date;
       }
-      return sessions;
-    } catch {
-      return [];
+      if (!s.summaries) s.summaries = [];
+      if (!s.tokens) s.tokens = { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+      if (!s.models) s.models = {};
+      if (s.account === undefined) s.account = null;
+      if (!s.host) s.host = "";
     }
+    return sessions;
+  } catch {
+    return [];
   }
-  return [];
 }
 
-async function saveSessions(sessions: Session[]): Promise<void> {
+export async function loadSessionsFrom(path: string): Promise<Session[]> {
+  const file = Bun.file(path);
+  if (!(await file.exists())) return [];
+  return parseSessionsJs(await file.text());
+}
+
+/** Other machines' data files present in the (possibly synced) data dir. */
+export function otherHostFiles(): string[] {
+  try {
+    return readdirSync(BASE_DIR)
+      .filter(f => /^sessions-data\..+\.js$/.test(f) && f !== `sessions-data.${HOST}.js`)
+      .map(f => join(BASE_DIR, f));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Sessions tracked by THIS machine. First run migrates the legacy
+ * single-file data (pre multi-host) into this host's file.
+ */
+export async function loadSessions(): Promise<Session[]> {
+  const own = await loadSessionsFrom(HOST_JS_FILE);
+  if (own.length > 0) return own;
+  // Migration: adopt the legacy file's sessions as ours (stamping host).
+  // Skip sessions already stamped with another machine's name - on
+  // multi-machine setups the legacy file may be a copy from another host,
+  // and adopting those would duplicate them into this host's file.
+  const legacy = (await loadSessionsFrom(SESSIONS_JS_FILE))
+    .filter(s => !s.host || s.host === HOST);
+  for (const s of legacy) if (!s.host) s.host = HOST;
+  return legacy;
+}
+
+export async function saveSessions(sessions: Session[]): Promise<void> {
   mkdirSync(BASE_DIR, { recursive: true });
+  for (const s of sessions) if (!s.host) s.host = HOST;
   const content = "window.SESSIONS_DATA = " + JSON.stringify(sessions, null, 2) + ";\n";
-  await Bun.write(SESSIONS_JS_FILE, content);
+  await Bun.write(HOST_JS_FILE, content);
+  // Single-machine setups keep the legacy file in sync so opening
+  // index.html via file:// still works. On multi-machine (other host files
+  // present) the legacy file is left alone - two writers over a synced file
+  // means conflicts; serve.ts is the merge point there.
+  if (otherHostFiles().length === 0) {
+    await Bun.write(SESSIONS_JS_FILE, content);
+  }
 }
 
 function findSession(sessions: Session[], sessionId: string): Session | undefined {
@@ -174,7 +243,7 @@ function extractText(content: string | ContentBlock[]): string {
   return "";
 }
 
-async function countUserMessages(transcriptPath: string): Promise<number> {
+export async function countUserMessages(transcriptPath: string): Promise<number> {
   let count = 0;
   try {
     const text = await Bun.file(transcriptPath).text();
@@ -210,11 +279,12 @@ async function countUserMessages(transcriptPath: string): Promise<number> {
   return count;
 }
 
-async function computeTokenUsage(transcriptPath: string): Promise<TokenUsage> {
+export async function computeTokenUsage(transcriptPath: string): Promise<UsageBreakdown> {
   const totals: TokenUsage = { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+  const models: Record<string, TokenUsage> = {};
   // Streamed multi-block turns repeat the same message id across several lines,
   // and output_tokens can grow between them; keep the LAST (final) usage per id.
-  const byId = new Map<string, Usage>();
+  const byId = new Map<string, { usage: Usage; model: string }>();
   try {
     const text = await Bun.file(transcriptPath).text();
     for (const line of text.split("\n")) {
@@ -228,28 +298,35 @@ async function computeTokenUsage(transcriptPath: string): Promise<TokenUsage> {
       const usage = entry.message?.usage;
       if (!usage) continue;
 
+      const model = entry.message?.model ?? "";
       const id = entry.message?.id;
       if (id) {
-        byId.set(id, usage);
+        byId.set(id, { usage, model });
         continue;
       }
-      addUsage(totals, usage);
+      addUsage(totals, models, usage, model);
     }
-    for (const usage of byId.values()) addUsage(totals, usage);
+    for (const { usage, model } of byId.values()) addUsage(totals, models, usage, model);
   } catch {
     // File not found or permission error
   }
-  return totals;
+  return { totals, models };
 }
 
-function addUsage(totals: TokenUsage, usage: Usage): void {
-  totals.input += usage.input_tokens ?? 0;
-  totals.output += usage.output_tokens ?? 0;
-  totals.cache_write += usage.cache_creation_input_tokens ?? 0;
-  totals.cache_read += usage.cache_read_input_tokens ?? 0;
+function addUsage(totals: TokenUsage, models: Record<string, TokenUsage>, usage: Usage, model: string): void {
+  const add = (t: TokenUsage) => {
+    t.input += usage.input_tokens ?? 0;
+    t.output += usage.output_tokens ?? 0;
+    t.cache_write += usage.cache_creation_input_tokens ?? 0;
+    t.cache_read += usage.cache_read_input_tokens ?? 0;
+  };
+  add(totals);
+  // "<synthetic>" entries are error placeholders, not billable model output
+  if (!model || model === "<synthetic>") return;
+  add(models[model] ??= { input: 0, output: 0, cache_write: 0, cache_read: 0 });
 }
 
-async function buildConversationText(
+export async function buildConversationText(
   transcriptPath: string,
   skipUserMessages = 0
 ): Promise<string> {
@@ -317,7 +394,14 @@ async function buildConversationText(
 async function callCli(prompt: string): Promise<SummaryResult> {
   const proc = Bun.spawn(
     ["claude", "-p", "--model", "haiku", "--no-session-persistence"],
-    { stdin: new Blob([prompt]), stdout: "pipe", stderr: "pipe" }
+    {
+      stdin: new Blob([prompt]),
+      stdout: "pipe",
+      stderr: "pipe",
+      // Mark the subprocess so its own Stop/SessionEnd hooks (this script,
+      // registered globally) exit immediately instead of tracking it.
+      env: { ...process.env, SESSION_TRACKER_NESTED: "1" },
+    }
   );
 
   const [stdout, exitCode] = await Promise.all([
@@ -339,7 +423,7 @@ async function callCli(prompt: string): Promise<SummaryResult> {
   throw new Error(`No JSON found in response: ${text.slice(0, 200)}`);
 }
 
-async function analyzeConversation(conversationText: string): Promise<SummaryResult> {
+export async function analyzeConversation(conversationText: string): Promise<SummaryResult> {
   const prompt = SUMMARY_PROMPT.replace("{conversation}", conversationText);
   return callCli(prompt);
 }
@@ -348,6 +432,46 @@ async function consolidateSummaries(summaries: string[]): Promise<SummaryResult>
   const numbered = summaries.map((s, i) => `${i + 1}. ${s}`).join("\n");
   const prompt = FINAL_SUMMARY_PROMPT.replace("{summaries}", numbered);
   return callCli(prompt);
+}
+
+// -- Account / subscription --
+
+function planLabel(oa: Record<string, unknown>): string {
+  const tier = String(oa.organizationRateLimitTier ?? oa.userRateLimitTier ?? "");
+  const max = tier.match(/max_(\d+x)/);
+  if (max) return `Max ${max[1]}`;
+  const orgType = String(oa.organizationType ?? "");
+  if (orgType === "claude_max" || tier.includes("max")) return "Max";
+  if (orgType === "claude_pro" || tier.includes("pro")) return "Pro";
+  if (orgType === "claude_enterprise") return "Enterprise";
+  if (orgType === "claude_team") return "Team";
+  if (String(oa.billingType ?? "").includes("api")) return "API";
+  return orgType || "unknown";
+}
+
+/**
+ * Reads the account active for THIS Claude Code process from .claude.json.
+ * Users running multiple subscriptions typically separate them via
+ * CLAUDE_CONFIG_DIR, which the hook inherits - so each session gets
+ * stamped with the account it actually ran under.
+ */
+async function readAccount(): Promise<AccountInfo | null> {
+  const configDir = process.env.CLAUDE_CONFIG_DIR;
+  const configFile = configDir
+    ? join(configDir, ".claude.json")
+    : join(homedir(), ".claude.json");
+  try {
+    const config = await Bun.file(configFile).json();
+    const oa = config.oauthAccount;
+    if (!oa || typeof oa !== "object") return null;
+    return {
+      uuid: String(oa.accountUuid ?? ""),
+      email: String(oa.emailAddress ?? ""),
+      plan: planLabel(oa),
+    };
+  } catch {
+    return null;
+  }
 }
 
 // -- Git --
@@ -479,33 +603,91 @@ function shouldAnalyze(msgCount: number, lastAnalyzedAt: number): boolean {
 
 // -- Auto-provision web UI --
 
-function provisionWebUI(): void {
-  mkdirSync(BASE_DIR, { recursive: true });
+function provisionFile(source: string, target: string): void {
   try {
-    const srcStat = statSync(WEB_UI_SOURCE);
+    const srcStat = statSync(source);
     let needsCopy = true;
     try {
-      const dstStat = statSync(WEB_UI_TARGET);
+      const dstStat = statSync(target);
       needsCopy = srcStat.mtimeMs > dstStat.mtimeMs || srcStat.size !== dstStat.size;
     } catch {
       // Target doesn't exist
     }
     if (needsCopy) {
-      copyFileSync(WEB_UI_SOURCE, WEB_UI_TARGET);
+      copyFileSync(source, target);
     }
   } catch {
     // Source not found - skip (e.g. running outside plugin context)
   }
 }
 
+function provisionWebUI(): void {
+  mkdirSync(BASE_DIR, { recursive: true });
+  provisionFile(WEB_UI_SOURCE, WEB_UI_TARGET);
+  provisionFile(SERVER_SOURCE, SERVER_TARGET);
+}
+
 // -- Main --
 
+/**
+ * Detach the SessionEnd processor so Claude Code's shutdown isn't blocked.
+ * POSIX: shell background job. Windows: WMI Win32_Process.Create - Bun kills
+ * plain child processes when the parent exits, but a WMI-created process
+ * belongs to the WMI service, outside our process tree. Returns false when
+ * detaching failed and the caller should process inline instead.
+ */
+function spawnDetachedFinal(scriptPath: string, inputFile: string, logFile: string): boolean {
+  try {
+    if (process.platform === "win32") {
+      // A WMI-created process doesn't inherit our environment, so re-export
+      // the vars that pick the data dir (also keeps cmd /c from applying its
+      // quote-stripping rule, since the line no longer starts with a quote).
+      let envPrefix = `set "SESSION_TRACKER_DIR=${BASE_DIR}"&& `;
+      if (process.env.SESSION_TRACKER_HOSTNAME) {
+        envPrefix += `set "SESSION_TRACKER_HOSTNAME=${process.env.SESSION_TRACKER_HOSTNAME}"&& `;
+      }
+      const cmdLine = `cmd /c ${envPrefix}"${process.execPath}" "${scriptPath}" --final-bg "${inputFile}" >> "${logFile}" 2>&1`;
+      const psArg = "'" + cmdLine.replace(/'/g, "''") + "'";
+      const proc = Bun.spawnSync([
+        "powershell", "-NoProfile", "-NonInteractive", "-Command",
+        `(Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${psArg} }).ReturnValue`,
+      ]);
+      return proc.exitCode === 0 && proc.stdout.toString().trim() === "0";
+    }
+    Bun.spawn([
+      "sh", "-c",
+      `bun "${scriptPath}" --final-bg "${inputFile}" </dev/null >>"${logFile}" 2>&1 &`,
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Delete final-*.json inputs older than a day (orphans from failed detaches). */
+function sweepStaleFinalInputs(): void {
+  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  try {
+    for (const f of readdirSync(BASE_DIR)) {
+      const m = /^final-(\d+)\.json$/.exec(f);
+      if (m && Number(m[1]) < dayAgo) {
+        try { unlinkSync(join(BASE_DIR, f)); } catch { /* in use */ }
+      }
+    }
+  } catch { /* no data dir yet */ }
+}
+
 async function main(): Promise<void> {
+  // Session spawned by this very hook (summary CLI call): don't track it.
+  if (process.env.SESSION_TRACKER_NESTED) process.exit(0);
+
   provisionWebUI();
 
   const isFinal = process.argv.includes("--final");
   const finalBgIdx = process.argv.indexOf("--final-bg");
-  const isFinalBg = finalBgIdx !== -1;
+  let isFinalBg = finalBgIdx !== -1;
+
+  let hookInput: HookInput;
 
   // SessionEnd: save input and fork to a detached background process,
   // then exit immediately so Claude Code's shutdown isn't blocked.
@@ -514,18 +696,22 @@ async function main(): Promise<void> {
     const inputText = await Bun.stdin.text();
     const inputFile = join(BASE_DIR, `final-${Date.now()}.json`);
     await Bun.write(inputFile, inputText);
-    const scriptPath = import.meta.filename;
+    sweepStaleFinalInputs();
     const logFile = join(BASE_DIR, "session-end.log");
-    Bun.spawn([
-      "sh", "-c",
-      `bun "${scriptPath}" --final-bg "${inputFile}" </dev/null >>"${logFile}" 2>&1 &`,
-    ]);
-    process.exit(0);
-  }
-
-  // Read hook input: from temp file (detached) or stdin (normal Stop hook)
-  let hookInput: HookInput;
-  if (isFinalBg) {
+    if (spawnDetachedFinal(import.meta.filename, inputFile, logFile)) {
+      process.exit(0);
+    }
+    // Couldn't detach: process inline. Blocks shutdown for one summary
+    // call, but the final is never silently dropped.
+    try {
+      hookInput = JSON.parse(inputText);
+      unlinkSync(inputFile);
+    } catch {
+      process.exit(0);
+    }
+    isFinalBg = true;
+  } else if (isFinalBg) {
+    // Read hook input from the temp file written by --final
     const inputFile = process.argv[finalBgIdx + 1];
     try {
       hookInput = JSON.parse(await Bun.file(inputFile).text());
@@ -534,6 +720,7 @@ async function main(): Promise<void> {
       process.exit(0);
     }
   } else {
+    // Normal Stop hook: input on stdin
     hookInput = await readHookInput();
   }
 
@@ -547,7 +734,7 @@ async function main(): Promise<void> {
   if (!(await Bun.file(transcriptPath).exists())) process.exit(0);
 
   const msgCount = await countUserMessages(transcriptPath);
-  const tokens = await computeTokenUsage(transcriptPath);
+  const usage = await computeTokenUsage(transcriptPath);
   const sessions = await loadSessions();
 
   // Cleanup stale sessions (handles terminal close / Ctrl+C / crash)
@@ -591,6 +778,8 @@ async function main(): Promise<void> {
 
   const now = new Date().toISOString().replace("T", " ").slice(0, 16);
   const branch = await getGitBranch(cwd);
+  // First stamp wins: the session belongs to the account it started under
+  const account = existing?.account ?? await readAccount();
   const projectName = cwd ? basename(cwd) : "unknown";
   const isFirstAnalysis = effectiveLastAnalyzed === 0;
   const priorSummaries = isTranscriptReset ? [] : (existing?.summaries ?? []);
@@ -670,7 +859,10 @@ async function main(): Promise<void> {
     last_analyzed_at: msgCount,
     analysis_count: analysisCount,
     summaries: updatedSummaries,
-    tokens,
+    tokens: usage.totals,
+    models: usage.models,
+    account: freshExisting?.account ?? account,
+    host: HOST,
   };
 
   if (freshExisting) {
@@ -693,4 +885,7 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+// Only run as a hook when executed directly (backfill.ts imports this file)
+if (import.meta.main) {
+  main();
+}

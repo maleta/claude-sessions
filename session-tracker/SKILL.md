@@ -20,6 +20,18 @@ When the user asks about previous work, past sessions, or wants context on what 
 
 If `SESSION_SUMMARIES.md` does not exist, inform the user that no session history is available for this project yet. Note: this file can be disabled per project via `sessionTracker.summaryFile: false` in `.claude/settings.local.json`.
 
+## Cross-project history
+
+For questions spanning multiple projects ("what did I work on last week?", "find the session where I fixed X in another repo"), read the global data file instead:
+
+```
+~/.claude/session-tracker/sessions-data.js
+```
+
+It is a single `window.SESSIONS_DATA = [...]` assignment - strip the prefix and parse the JSON array. Each entry has: `id`, `started_at`, `updated_at`, `project`, `project_path`, `branch`, `title`, `summary`, `topics`, `status`, `messages`, `tokens` (input/output/cache_write/cache_read), `resume` (ready-to-paste command), and `account` (`{ uuid, email, plan }` of the subscription it ran under, or `null` for sessions imported by backfill or tracked before account support).
+
+If the user's history predates the plugin, sessions can be imported with `bun scripts/backfill.ts` (see the repo README).
+
 ## Session Entry Format
 
 Each session is wrapped in HTML comments:
@@ -55,3 +67,5 @@ A full browsable session history is available at:
 ```
 open ~/.claude/session-tracker/index.html
 ```
+
+Served locally instead (`bun ~/.claude/session-tracker/serve.ts` → `http://127.0.0.1:4457`), the UI additionally supports **click-to-resume**: clicking a session card opens a new terminal already resuming that session. If the data contains sessions from several accounts/subscriptions, the UI offers per-account filter chips.

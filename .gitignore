@@ -3,3 +3,10 @@ node_modules/
 *.log
 SESSION_SUMMARIES.md
 .claude/
+
+# Local secrets / runtime data (belong in the data dir, never the repo)
+telegram.json
+terminal.json
+remote-hosts.json
+sessions-data*.js
+sessions-meta*.js
