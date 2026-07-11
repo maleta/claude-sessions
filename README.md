@@ -14,6 +14,7 @@ Automatically tracks and summarizes Claude Code sessions using Claude Haiku. Pro
 - **Resume commands** - One-click copy of `claude --resume <id>` commands
 - **Click-to-resume** - With the optional local server, clicking a session card opens a new terminal already resuming that session
 - **Backfill** - One command imports your whole pre-existing transcript history into the tracker
+- **Editing** - Fix Haiku's titles/summaries, add your own searchable notes, pin, archive or delete sessions from the UI (synced across machines, never lost to re-analysis)
 - **Session history skill** - Claude can read past session context via the plugin skill
 
 ## Requirements
@@ -98,6 +99,18 @@ API endpoints:
 | `/api/resume` | POST | `{ "id": "<session-id>" }` - opens a terminal resuming that session |
 
 `/api/resume` safety model: localhost bind by default, a required custom header (`x-session-tracker: 1`) forces a CORS preflight so web pages on other origins can't trigger it, the session id must match the tracked data (400 on malformed, 404 on unknown), and the working directory comes from the stored session - never from the request. Terminal launchers per platform: `wt`/`cmd` on Windows (Windows Terminal is an app-execution alias that Bun can neither stat nor spawn, so it's detected with `where.exe` and launched through `cmd /c start`), `Terminal.app` via osascript on macOS, `x-terminal-emulator`/`gnome-terminal`/`konsole`/`xterm` on Linux.
+
+### Editing, notes, archive and delete
+
+Click a session's title (or its `details` button) to open the detail view: full metadata, the incremental summaries, and - when served over http - an edit form. You can override the title, summary, topics and status (the original values are kept and shown as a hint; saving a field back to its original clears the override), add a free-text **note** (shown on the card, searchable), **pin** the session to the top of its project, **archive** it (hidden behind a "show archived" toggle) or **delete** it.
+
+Edits never touch the per-machine data files - the hooks own those and would overwrite your changes, and a removed entry would just be resurrected by the next backfill. Instead each serving machine writes its own `sessions-meta.<machine>.js` overlay (same zero-conflict single-writer rule as the data files), merged at read time. Practical consequences:
+
+- Your edits always win over Haiku's analysis, even for still-active sessions.
+- **Delete is a tombstone**: the session disappears everywhere, the backfill skips it, and it's restorable from "show deleted". For physical removal run `bun scripts/purge.ts` (dry-run; add `--apply`) on the machine that owns the entries - tombstones are kept so backfills stay blocked. Transcripts in `~/.claude/projects` are never touched.
+- Set `SESSION_TRACKER_NO_EDIT=1` to disable the editing endpoint on a server.
+
+The UI auto-refreshes every minute in server mode, so edits and new sessions from other machines/browsers appear on their own. On `file://` the UI stays read-only (with the old per-browser hide); existing localStorage hides are migrated to synced archives the first time you use an edit-capable server.
 
 ### Backfill your history
 

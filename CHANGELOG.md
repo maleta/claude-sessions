@@ -79,6 +79,27 @@ refresher never ran either); config is now fetched before mount.
 multi-machine reality: transcripts don't record the account, but you often
 know which subscription a machine or an era of history ran under.
 
+### Session editing (metadata overlay)
+
+Titles, summaries, topics and status can be edited from a new detail view
+(click a session title); sessions gain user notes (searchable, shown on the
+card), pin, archive and delete. Edits live in per-machine
+`sessions-meta.<machine>.js` overlay files - never in the data files, which
+the hooks own and would overwrite (and where a removed entry would be
+resurrected by the next backfill). The overlay is merged at read time
+(newest entry per session wins, snapshotting the merged state so edits from
+different machines compose), so user edits survive re-analysis of active
+sessions by design.
+
+Delete is a tombstone: hidden everywhere, skipped by backfill, restorable
+via "show deleted"; physical removal via `scripts/purge.ts` (dry-run by
+default, `--apply`), which only touches the running machine's own data file.
+Archive replaces the old per-browser localStorage hide whenever an
+edit-capable server is available (existing hides migrate automatically);
+`SESSION_TRACKER_NO_EDIT=1` disables editing on a server. Plus: per-status
+filter chips, minute-level auto-refresh in server mode, and a single-column
+mobile layout.
+
 ### Internal
 
 - `SESSION_TRACKER_DIR` env override for the data directory (isolated testing).
