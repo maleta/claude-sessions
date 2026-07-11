@@ -111,6 +111,27 @@ It scans `~/.claude/projects/**/*.jsonl`, skips sessions already tracked and emp
 
 Backfilled sessions have no account info by default (transcripts don't record it), but if you know which subscription a machine or an era of history was used with, `--account "old@example.com:Pro"` stamps it on everything imported by that run - so old-account sessions get their own filter chip. Unlike the live hook, the backfill never writes `SESSION_SUMMARIES.md` into your project directories.
 
+### Multiple machines
+
+Every session records the machine it ran on (`host`, from the hostname; `SESSION_TRACKER_HOSTNAME` overrides). Each machine writes its own `sessions-data.<host>.js`, so you can sync the data directory between machines (e.g. with Syncthing) and never get sync conflicts - no two machines write the same file. `serve.ts` merges all data files it finds and serves the combined set.
+
+With 2+ machines in the data the UI shows host filter chips and a host badge per card, and groups sessions by **project name** rather than absolute path - with a synced dev folder the same repo lives at a different path on every machine, and this keeps it as one column (all paths are in the group tooltip).
+
+Resume is host-aware: clicking a session from the machine the server runs on opens a terminal as usual; clicking one from another machine copies a command instead. Drop an optional `remote-hosts.json` in the data dir to control what gets copied:
+
+```json
+{
+  "my-server": {
+    "label": "dev server",
+    "command": "ssh me@server \"cd {path} && claude --resume {id}\""
+  }
+}
+```
+
+`{id}`, `{path}` and `{project}` are filled from the session. Without an entry, the plain `claude --resume <id>` is copied. `/api/resume` refuses sessions from other hosts either way.
+
+Single-machine setups are unaffected: the legacy `sessions-data.js` keeps being written (and `file://` browsing keeps working) until a second machine's data file appears in the dir.
+
 ### Multiple accounts / subscriptions
 
 Every session is stamped with the account it ran under - email and plan (`Max 20x`, `Pro`, `Team`, ...) - read from the `.claude.json` of the Claude Code process that fired the hook (`CLAUDE_CONFIG_DIR` is respected, so per-account config dirs are attributed correctly).

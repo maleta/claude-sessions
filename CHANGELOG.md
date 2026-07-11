@@ -54,6 +54,31 @@ The hook was refactored to export its transcript/analysis helpers and only run
 `main()` when executed directly (`import.meta.main`), so backfill and hook share
 one implementation.
 
+### Multi-machine support
+
+Sessions live on the machine that ran them, but people work from several
+machines (and from headless servers running Claude Code remotely). Every
+session now records its `host`, and each machine writes its own
+`sessions-data.<host>.js` - syncing the data dir (e.g. Syncthing) is safe by
+construction because no two machines ever write the same file. `serve.ts`
+merges every data file it finds; the UI gains host filter chips, a per-card
+host badge, and groups by project NAME instead of absolute path (a synced dev
+folder puts the same repo at different paths per machine).
+
+Resume became host-aware: local sessions open a terminal as before; sessions
+from another machine copy a command defined in an optional `remote-hosts.json`
+(`{id}`/`{path}`/`{project}` placeholders - e.g. ssh + docker exec + tmux into
+a server). `/api/resume` refuses foreign sessions. Single-machine setups are
+unaffected (legacy `sessions-data.js` and `file://` browsing keep working).
+
+Also fixed along the way: the UI fetched server config from a blok `init()`
+hook that the framework never calls (latent upstream bug - the relative-time
+refresher never ran either); config is now fetched before mount.
+
+`--account <email[:plan]>` was added to the backfill for the same
+multi-machine reality: transcripts don't record the account, but you often
+know which subscription a machine or an era of history ran under.
+
 ### Internal
 
 - `SESSION_TRACKER_DIR` env override for the data directory (isolated testing).
