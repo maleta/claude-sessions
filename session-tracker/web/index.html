@@ -205,6 +205,24 @@
     border-radius: 12px;
     white-space: nowrap;
   }
+  .card-artifacts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .artifact-link {
+    background: #2a1f37;
+    color: #d2a8ff;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+  .artifact-link::before { content: '↗ '; }
+  .artifact-link:hover { background: #3a2a4a; text-decoration: underline; }
   .badge {
     display: inline-block;
     font-size: 0.75rem;
@@ -336,8 +354,10 @@ const _raw = (window.SESSIONS_DATA || [])
     const tk = s.tokens || { input: 0, output: 0, cache_write: 0, cache_read: 0 };
     return {
     ...s,
-    _search: [s.title, s.summary, s.topics, s.project, s.project_path].join('\0').toLowerCase(),
+    _search: [s.title, s.summary, s.topics, s.project, s.project_path,
+      ...(s.artifacts || []).flatMap(a => [a.title, a.url])].join('\0').toLowerCase(),
     _topics: s.topics.split(',').map(t => t.trim()).filter(Boolean),
+    _artifacts: s.artifacts || [],
     _badgeClass: 'badge badge-' + s.status,
     _msgLabel: s.messages + ' msgs',
     _endPrefix: s.updated_at && s.updated_at !== s.started_at ? (s.status === 'completed' ? 'end' : 'latest') : '',
@@ -565,6 +585,19 @@ blok.mount('#app', {
                     ]}},
                     { span: { class: 'tok-cost', text: $.s._tokCost } },
                   ]}},
+                  { when: $.s._artifacts.length, children: [
+                    { div: { class: 'card-artifacts', children: [
+                      { each: $.s._artifacts, as: 'art', children: [
+                        { a: {
+                          class: 'artifact-link',
+                          bind: { href: $.art.url, title: $.art.url },
+                          target: '_blank',
+                          rel: 'noopener',
+                          text: $.art.title,
+                        }},
+                      ]},
+                    ]}},
+                  ]},
                   { div: { class: 'card-footer', children: [
                     { div: { class: 'topics', children: [
                       { each: $.s._topics, as: 't', children: [

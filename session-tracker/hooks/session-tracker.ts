@@ -58,6 +58,11 @@ interface TokenUsage {
   cache_read: number;   // cache_read_input_tokens (cache hits)
 }
 
+interface ArtifactLink {
+  title: string;
+  url: string;
+}
+
 interface Session {
   id: string;
   started_at: string;
@@ -75,6 +80,7 @@ interface Session {
   analysis_count: number;
   summaries: string[];
   tokens: TokenUsage;
+  artifacts: ArtifactLink[];
 }
 
 interface HookInput {
@@ -94,6 +100,11 @@ interface SummaryResult {
 interface ContentBlock {
   type: string;
   text?: string;
+  id?: string;
+  name?: string;
+  input?: { file_path?: string; title?: string };
+  tool_use_id?: string;
+  content?: string | ContentBlock[];
 }
 
 interface Usage {
@@ -105,6 +116,8 @@ interface Usage {
 
 interface TranscriptEntry {
   type: string;
+  frameUrl?: string;
+  title?: string;
   message?: {
     id?: string;
     role?: string;
@@ -132,6 +145,7 @@ async function loadSessions(): Promise<Session[]> {
         }
         if (!s.summaries) s.summaries = [];
         if (!s.tokens) s.tokens = { input: 0, output: 0, cache_write: 0, cache_read: 0 };
+        if (!s.artifacts) s.artifacts = [];
       }
       return sessions;
     } catch {
@@ -248,6 +262,53 @@ function addUsage(totals: TokenUsage, usage: Usage): void {
   totals.output += usage.output_tokens ?? 0;
   totals.cache_write += usage.cache_creation_input_tokens ?? 0;
   totals.cache_read += usage.cache_read_input_tokens ?? 0;
+}
+
+async function extractArtifacts(transcriptPath: string): Promise<ArtifactLink[]> {
+  // Artifact publishes: assistant tool_use (name "Artifact") followed by a
+  // tool_result whose text reads "Published <path> at <url>". The CLI writes a
+  // "frame-link" entry per publish carrying the artifact's real title.
+  const titleByToolUseId = new Map<string, string>();
+  const frameTitleByUrl = new Map<string, string>();
+  const byUrl = new Map<string, ArtifactLink>();
+  try {
+    const text = await Bun.file(transcriptPath).text();
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      let entry: TranscriptEntry;
+      try { entry = JSON.parse(trimmed); } catch { continue; }
+
+      if (entry.type === "frame-link" && entry.frameUrl && entry.title) {
+        frameTitleByUrl.set(entry.frameUrl, entry.title);
+        continue;
+      }
+
+      const content = entry.message?.content;
+      if (!Array.isArray(content)) continue;
+
+      for (const block of content) {
+        if (entry.type === "assistant" && block.type === "tool_use" && block.name === "Artifact" && block.id) {
+          const input = block.input ?? {};
+          const title = input.title || (input.file_path ? basename(input.file_path) : "artifact");
+          titleByToolUseId.set(block.id, title);
+        }
+        if (entry.type === "user" && block.type === "tool_result" && block.tool_use_id) {
+          const title = titleByToolUseId.get(block.tool_use_id);
+          if (!title) continue;
+          const match = extractText(block.content ?? "").match(/^Published .+ at (https:\/\/\S+)/m);
+          if (match) byUrl.set(match[1], { title, url: match[1] });
+        }
+      }
+    }
+  } catch {
+    // File not found or permission error
+  }
+  for (const link of byUrl.values()) {
+    link.title = frameTitleByUrl.get(link.url) ?? link.title;
+  }
+  return [...byUrl.values()];
 }
 
 async function buildConversationText(
@@ -568,6 +629,7 @@ async function main(): Promise<void> {
 
   const msgCount = await countUserMessages(transcriptPath);
   const tokens = await computeTokenUsage(transcriptPath);
+  const artifacts = await extractArtifacts(transcriptPath);
   const sessions = await loadSessions();
 
   // Cleanup stale sessions (handles terminal close / Ctrl+C / crash)
@@ -675,6 +737,12 @@ async function main(): Promise<void> {
   const freshExisting = findSession(freshSessions, sessionId);
   const analysisCount = (freshExisting?.analysis_count ?? 0) + 1;
 
+  // Keep artifacts published before a transcript reset (/clear) in the union
+  const mergedArtifacts = new Map<string, ArtifactLink>(
+    (freshExisting?.artifacts ?? []).map(a => [a.url, a])
+  );
+  for (const a of artifacts) mergedArtifacts.set(a.url, a);
+
   const sessionObj: Session = {
     id: sessionId,
     started_at: freshExisting?.started_at ?? existing?.started_at ?? now,
@@ -692,6 +760,7 @@ async function main(): Promise<void> {
     analysis_count: analysisCount,
     summaries: updatedSummaries,
     tokens,
+    artifacts: [...mergedArtifacts.values()],
   };
 
   if (freshExisting) {
