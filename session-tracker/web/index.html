@@ -648,9 +648,14 @@ blok.mount('#app', {
 
   init() {
     setInterval(() => { this.tick++; }, 60000);
-    if (this.pbUrl) {
-      this.loadFromPb().catch(err => { this.pbStatus = 'PocketBase unreachable: ' + err.message; });
-    }
+    const refresh = () => {
+      if (!this.pbUrl) return;
+      this.loadFromPb()
+        .then(() => { this.pbStatus = ''; })
+        .catch(err => { this.pbStatus = 'PocketBase unreachable: ' + err.message; });
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
   },
 
   watch: {
@@ -757,7 +762,7 @@ blok.mount('#app', {
         ? this.favoriteIds.filter(x => x !== id)
         : [...this.favoriteIds, id];
       saveFavorites(this.favoriteIds);
-      this._syncSession(id);
+      this._syncSession(id, { favorite: this.favoriteIds.includes(id) });
     },
     editNote(id) {
       this.editingId = id;
@@ -773,7 +778,7 @@ blok.mount('#app', {
       if (text) notes[id] = text; else delete notes[id];
       this.notes = notes;
       saveNotes(notes);
-      this._syncSession(id);
+      this._syncSession(id, { note: text });
       this.editingId = '';
     },
     openSettings() {
@@ -801,9 +806,14 @@ blok.mount('#app', {
       this.pbStatus = 'connecting...';
       try {
         await pbCreateCollection(url, this.pbEmail.trim(), this.pbPassword);
+        const remote = new Map((await pbFetchState(url)).map(r => [r.session_id, r]));
         const ids = new Set([...Object.keys(this.notes), ...this.favoriteIds]);
         for (const id of ids) {
-          await pbUpsert(url, id, { note: this.notes[id] || '', favorite: this.favoriteIds.includes(id) });
+          const r = remote.get(id);
+          const fields = {};
+          if (this.notes[id] && !r?.note) fields.note = this.notes[id];
+          if (this.favoriteIds.includes(id) && !r?.favorite) fields.favorite = true;
+          if (Object.keys(fields).length) await pbUpsert(url, id, fields);
         }
         savePbUrl(url);
         this.pbUrl = url;
@@ -832,9 +842,9 @@ blok.mount('#app', {
       saveNotes(notes);
       saveFavorites(favs);
     },
-    _syncSession(id) {
+    _syncSession(id, fields) {
       if (!this.pbUrl) return;
-      pbUpsert(this.pbUrl, id, { note: this.notes[id] || '', favorite: this.favoriteIds.includes(id) })
+      pbUpsert(this.pbUrl, id, fields)
         .then(() => { this.pbStatus = ''; })
         .catch(err => { this.pbStatus = 'sync failed: ' + err.message; });
     },
