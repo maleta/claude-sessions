@@ -646,7 +646,7 @@ blok.mount('#app', {
     tick: 0,
   },
 
-  init() {
+  mount() {
     setInterval(() => { this.tick++; }, 60000);
     const refresh = () => {
       if (!this.pbUrl) return;
