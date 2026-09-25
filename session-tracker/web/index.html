@@ -269,6 +269,80 @@
     border-color: #58a6ff;
     color: #58a6ff;
   }
+  .note-btn {
+    background: none;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    font-size: 0.75rem;
+    padding: 3px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: monospace;
+    transition: all 0.2s;
+  }
+  .note-btn:hover { border-color: #d29922; color: #d29922; }
+  .note-btn.has-note { border-color: #9e6a03; color: #d29922; }
+  .card-note {
+    background: #1c1a12;
+    border-left: 2px solid #9e6a03;
+    color: #d8c89a;
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    white-space: pre-wrap;
+  }
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(1, 4, 9, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .panel {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 20px;
+    width: 100%;
+    max-width: 560px;
+  }
+  .panel h2 {
+    font-size: 1rem;
+    color: #e6edf3;
+    margin-bottom: 12px;
+  }
+  .panel-hint {
+    font-size: 0.8rem;
+    color: #8b949e;
+    margin-bottom: 12px;
+  }
+  .panel-status {
+    font-size: 0.8rem;
+    color: #d29922;
+    margin-bottom: 10px;
+    min-height: 1.2em;
+  }
+  .panel-field {
+    width: 100%;
+    padding: 8px 12px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #c9d1d9;
+    font-size: 0.9rem;
+    outline: none;
+    margin-bottom: 10px;
+  }
+  .panel-field:focus { border-color: #58a6ff; }
+  textarea.panel-field { min-height: 140px; resize: vertical; font-family: inherit; }
+  .panel-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
   .no-results {
     text-align: center;
     color: #484f58;
@@ -367,6 +441,94 @@ function saveFavorites(ids) {
   localStorage.setItem(FAV_STORAGE_KEY, JSON.stringify(ids));
 }
 
+const NOTES_STORAGE_KEY = 'claude-sessions-notes';
+
+function loadNotes() {
+  try {
+    const raw = localStorage.getItem(NOTES_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* ignore */ }
+  return {};
+}
+
+function saveNotes(notes) {
+  localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
+}
+
+const PB_STORAGE_KEY = 'claude-sessions-pb';
+const PB_DEFAULT_URL = 'http://127.0.0.1:8090';
+const PB_COLLECTION = 'session_state';
+
+function loadPbUrl() {
+  try {
+    return JSON.parse(localStorage.getItem(PB_STORAGE_KEY) || '{}').url || '';
+  } catch (e) { return ''; }
+}
+
+function savePbUrl(url) {
+  localStorage.setItem(PB_STORAGE_KEY, JSON.stringify({ url }));
+}
+
+async function pbRequest(url, path, options = {}) {
+  const res = await fetch(url.replace(/\/+$/, '') + path, options);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(body.message || 'HTTP ' + res.status);
+    err.body = body;
+    throw err;
+  }
+  return body;
+}
+
+function pbRecords(path = '') {
+  return '/api/collections/' + PB_COLLECTION + '/records' + path;
+}
+
+async function pbFetchState(url) {
+  const body = await pbRequest(url, pbRecords('?perPage=500'));
+  return body.items || [];
+}
+
+async function pbUpsert(url, sessionId, fields) {
+  const filter = encodeURIComponent("session_id='" + sessionId + "'");
+  const found = await pbRequest(url, pbRecords('?filter=' + filter));
+  const existing = (found.items || [])[0];
+  return pbRequest(url, pbRecords(existing ? '/' + existing.id : ''), {
+    method: existing ? 'PATCH' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, ...fields }),
+  });
+}
+
+// Superuser credentials are used for this one call and never stored.
+// The collection has open rules, so later reads and writes need no auth.
+async function pbCreateCollection(url, email, password) {
+  const auth = await pbRequest(url, '/api/collections/_superusers/auth-with-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identity: email, password }),
+  });
+  try {
+    await pbRequest(url, '/api/collections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: auth.token },
+      body: JSON.stringify({
+        name: PB_COLLECTION,
+        type: 'base',
+        listRule: '', viewRule: '', createRule: '', updateRule: '', deleteRule: '',
+        fields: [
+          { name: 'session_id', type: 'text', required: true },
+          { name: 'note', type: 'text' },
+          { name: 'favorite', type: 'bool' },
+        ],
+        indexes: ['CREATE UNIQUE INDEX idx_' + PB_COLLECTION + '_session ON ' + PB_COLLECTION + ' (session_id)'],
+      }),
+    });
+  } catch (err) {
+    if (err.body?.data?.name?.code !== 'validation_collection_name_exists') throw err;
+  }
+}
+
 const stored = loadHidden();
 let _debounceTimer = null;
 
@@ -416,11 +578,23 @@ blok.mount('#app', {
     hiddenSessionIds: stored.sessions,
     hiddenProjectPaths: stored.projects,
     favoriteIds: loadFavorites(),
+    notes: loadNotes(),
+    editingId: '',
+    noteDraft: '',
+    pbUrl: loadPbUrl(),
+    pbUrlInput: loadPbUrl() || PB_DEFAULT_URL,
+    pbEmail: '',
+    pbPassword: '',
+    pbStatus: '',
+    showSettings: false,
     tick: 0,
   },
 
   init() {
     setInterval(() => { this.tick++; }, 60000);
+    if (this.pbUrl) {
+      this.loadFromPb().catch(err => { this.pbStatus = 'PocketBase unreachable: ' + err.message; });
+    }
   },
 
   watch: {
@@ -450,11 +624,13 @@ blok.mount('#app', {
       const hiddenIds = new Set(this.hiddenSessionIds);
       const hiddenPaths = new Set(this.hiddenProjectPaths);
       const favIds = new Set(this.favoriteIds);
+      const notes = this.notes;
       for (const s of this.filtered) {
         const path = s.project_path;
         if (!map.has(path)) map.set(path, []);
         s._isHidden = hiddenIds.has(s.id);
         s._isFav = favIds.has(s.id);
+        s._note = notes[s.id] || '';
         s._startLabel = 'start: ' + relativeTime(s.started_at);
         s._endLabel = s._endPrefix ? s._endPrefix + ': ' + relativeTime(s.updated_at) : '';
         map.get(path).push(s);
@@ -473,6 +649,10 @@ blok.mount('#app', {
       const g = this.grouped.length;
       return s + ' session' + (s !== 1 ? 's' : '') + (this.search ? ' matching' : '') +
         ' in ' + g + ' project' + (g !== 1 ? 's' : '');
+    },
+    pbBtnText() {
+      if (!this.pbUrl) return 'sync: local';
+      return this.pbStatus ? 'sync: error' : 'sync: pocketbase';
     },
     hiddenBtnText() {
       return (this.showHidden ? 'hide' : 'show') + ' ' + this.hiddenCount + ' hidden';
@@ -499,6 +679,73 @@ blok.mount('#app', {
         ? this.favoriteIds.filter(x => x !== id)
         : [...this.favoriteIds, id];
       saveFavorites(this.favoriteIds);
+      this._syncSession(id);
+    },
+    editNote(id) {
+      this.editingId = id;
+      this.noteDraft = this.notes[id] || '';
+    },
+    cancelNote() {
+      this.editingId = '';
+    },
+    saveNote() {
+      const id = this.editingId;
+      const text = this.noteDraft.trim();
+      const notes = { ...this.notes };
+      if (text) notes[id] = text; else delete notes[id];
+      this.notes = notes;
+      saveNotes(notes);
+      this._syncSession(id);
+      this.editingId = '';
+    },
+    openSettings() {
+      this.showSettings = true;
+    },
+    closeSettings() {
+      this.showSettings = false;
+      this.pbPassword = '';
+    },
+    async connectPb() {
+      const url = this.pbUrlInput.trim() || PB_DEFAULT_URL;
+      this.pbStatus = 'connecting...';
+      try {
+        await pbCreateCollection(url, this.pbEmail.trim(), this.pbPassword);
+        const ids = new Set([...Object.keys(this.notes), ...this.favoriteIds]);
+        for (const id of ids) {
+          await pbUpsert(url, id, { note: this.notes[id] || '', favorite: this.favoriteIds.includes(id) });
+        }
+        savePbUrl(url);
+        this.pbUrl = url;
+        await this.loadFromPb();
+        this.pbStatus = '';
+        this.closeSettings();
+      } catch (err) {
+        this.pbStatus = 'init failed: ' + err.message;
+      }
+    },
+    disconnectPb() {
+      savePbUrl('');
+      this.pbUrl = '';
+      this.pbStatus = '';
+    },
+    async loadFromPb() {
+      const items = await pbFetchState(this.pbUrl);
+      const notes = {};
+      const favs = [];
+      for (const it of items) {
+        if (it.note) notes[it.session_id] = it.note;
+        if (it.favorite) favs.push(it.session_id);
+      }
+      this.notes = notes;
+      this.favoriteIds = favs;
+      saveNotes(notes);
+      saveFavorites(favs);
+    },
+    _syncSession(id) {
+      if (!this.pbUrl) return;
+      pbUpsert(this.pbUrl, id, { note: this.notes[id] || '', favorite: this.favoriteIds.includes(id) })
+        .then(() => { this.pbStatus = ''; })
+        .catch(err => { this.pbStatus = 'sync failed: ' + err.message; });
     },
     hideSession(id) {
       if (this.hiddenSessionIds.includes(id)) return;
@@ -565,6 +812,12 @@ blok.mount('#app', {
               text: $.hiddenBtnText,
             }},
           ]},
+          { button: {
+            class: ['toggle-hidden', { active: $.pbUrl }],
+            click: 'openSettings',
+            bind: { title: 'Where notes and favorites are stored' },
+            text: $.pbBtnText,
+          }},
         ]}},
         { input: {
           class: 'search-box',
@@ -647,6 +900,9 @@ blok.mount('#app', {
                       ]},
                     ]}},
                   ]},
+                  { when: $.s._note, children: [
+                    { div: { class: 'card-note', text: $.s._note } },
+                  ]},
                   { div: { class: 'card-footer', children: [
                     { div: { class: 'topics', children: [
                       { each: $.s._topics, as: 't', children: [
@@ -654,6 +910,12 @@ blok.mount('#app', {
                       ]},
                     ]}},
                     { div: { class: 'card-actions', children: [
+                      { button: {
+                        class: ['note-btn', { 'has-note': $.s._note }],
+                        click: 'editNote(s.id)',
+                        bind: { title: 'Add or edit a note for this session' },
+                        text: 'note',
+                      }},
                       { button: {
                         class: ['fav-btn', { active: $.s._isFav }],
                         click: 'toggleFavorite(s.id)',
@@ -700,6 +962,52 @@ blok.mount('#app', {
       ]}},
 
       { div: { class: ['copied-toast', { show: $.showToast }], text: 'Copied to clipboard!' } },
+
+      { when: $.editingId, children: [
+        { div: { class: 'overlay', children: [
+          { div: { class: 'panel', children: [
+            { h2: 'Session note' },
+            { textarea: {
+              class: 'panel-field',
+              bind: { placeholder: 'Anything worth remembering about this session...' },
+              model: $.noteDraft,
+            }},
+            { div: { class: 'panel-actions', children: [
+              { button: { class: 'resume-btn', click: 'cancelNote', text: 'cancel' } },
+              { button: { class: 'resume-btn', click: 'saveNote', text: 'save' } },
+            ]}},
+          ]}},
+        ]}},
+      ]},
+
+      { when: $.showSettings, children: [
+        { div: { class: 'overlay', children: [
+          { div: { class: 'panel', children: [
+            { h2: 'Notes & favorites storage' },
+            { div: { class: 'panel-hint', text: 'Stored in this browser by default. Point this at a running PocketBase to keep them in a database; the superuser login is used once to create the collection and is never stored.' } },
+            { div: { class: 'panel-status', text: $.pbStatus } },
+            { input: {
+              class: 'panel-field',
+              type: 'text',
+              bind: { placeholder: PB_DEFAULT_URL },
+              model: $.pbUrlInput,
+            }},
+            { when: $.not.pbUrl, children: [
+              { input: { class: 'panel-field', type: 'email', bind: { placeholder: 'superuser email' }, model: $.pbEmail } },
+              { input: { class: 'panel-field', type: 'password', bind: { placeholder: 'superuser password' }, model: $.pbPassword } },
+            ]},
+            { div: { class: 'panel-actions', children: [
+              { button: { class: 'resume-btn', click: 'closeSettings', text: 'close' } },
+              { when: $.pbUrl, children: [
+                { button: { class: 'resume-btn', click: 'disconnectPb', text: 'use local' } },
+              ]},
+              { when: $.not.pbUrl, children: [
+                { button: { class: 'resume-btn', click: 'connectPb', text: 'init config' } },
+              ]},
+            ]}},
+          ]}},
+        ]}},
+      ]},
     ]},
   }),
 });
