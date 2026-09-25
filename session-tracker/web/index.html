@@ -134,6 +134,8 @@
     transition: border-color 0.2s;
   }
   .card:hover { border-color: #58a6ff; }
+  .card.card-fav { border-color: #9e6a03; }
+  .card.card-fav:hover { border-color: #e3b341; }
   .card.card-hidden {
     opacity: 0.4;
     border-style: dashed;
@@ -240,6 +242,18 @@
     gap: 6px;
     align-items: center;
   }
+  .fav-btn {
+    background: none;
+    border: none;
+    color: #484f58;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.2s;
+  }
+  .fav-btn:hover { color: #e3b341; }
+  .fav-btn.active { color: #e3b341; }
   .resume-btn {
     background: none;
     border: 1px solid #30363d;
@@ -339,6 +353,20 @@ function saveHidden(sessions, projects) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessions, projects }));
 }
 
+const FAV_STORAGE_KEY = 'claude-sessions-favorites';
+
+function loadFavorites() {
+  try {
+    const raw = localStorage.getItem(FAV_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* ignore */ }
+  return [];
+}
+
+function saveFavorites(ids) {
+  localStorage.setItem(FAV_STORAGE_KEY, JSON.stringify(ids));
+}
+
 const stored = loadHidden();
 let _debounceTimer = null;
 
@@ -362,6 +390,7 @@ const _raw = (window.SESSIONS_DATA || [])
     _msgLabel: s.messages + ' msgs',
     _endPrefix: s.updated_at && s.updated_at !== s.started_at ? (s.status === 'completed' ? 'end' : 'latest') : '',
     _isHidden: false,
+    _isFav: false,
     _tok: {
       in: formatTokens(tk.input),
       out: formatTokens(tk.output),
@@ -386,6 +415,7 @@ blok.mount('#app', {
     showHidden: false,
     hiddenSessionIds: stored.sessions,
     hiddenProjectPaths: stored.projects,
+    favoriteIds: loadFavorites(),
     tick: 0,
   },
 
@@ -419,17 +449,19 @@ blok.mount('#app', {
       const map = new Map();
       const hiddenIds = new Set(this.hiddenSessionIds);
       const hiddenPaths = new Set(this.hiddenProjectPaths);
+      const favIds = new Set(this.favoriteIds);
       for (const s of this.filtered) {
         const path = s.project_path;
         if (!map.has(path)) map.set(path, []);
         s._isHidden = hiddenIds.has(s.id);
+        s._isFav = favIds.has(s.id);
         s._startLabel = 'start: ' + relativeTime(s.started_at);
         s._endLabel = s._endPrefix ? s._endPrefix + ': ' + relativeTime(s.updated_at) : '';
         map.get(path).push(s);
       }
       return Array.from(map, ([path, sessions]) => ({
         projectPath: path,
-        sessions,
+        sessions: [...sessions.filter(s => s._isFav), ...sessions.filter(s => !s._isFav)],
         hidden: hiddenPaths.has(path),
       }));
     },
@@ -461,6 +493,12 @@ blok.mount('#app', {
   methods: {
     toggleHidden() {
       this.showHidden = !this.showHidden;
+    },
+    toggleFavorite(id) {
+      this.favoriteIds = this.favoriteIds.includes(id)
+        ? this.favoriteIds.filter(x => x !== id)
+        : [...this.favoriteIds, id];
+      saveFavorites(this.favoriteIds);
     },
     hideSession(id) {
       if (this.hiddenSessionIds.includes(id)) return;
@@ -550,7 +588,7 @@ blok.mount('#app', {
             ]}},
             { div: { class: 'cards', children: [
               { each: $.group.sessions, as: 's', key: 'id', children: [
-                { div: { class: { card: true, 'card-hidden': $.s._isHidden }, children: [
+                { div: { class: { card: true, 'card-hidden': $.s._isHidden, 'card-fav': $.s._isFav }, children: [
                   { div: { class: 'card-top', children: [
                     { div: { class: 'card-dates', children: [
                       { span: { class: 'card-date', bind: { title: $.s.started_at }, text: $.s._startLabel } },
@@ -605,6 +643,12 @@ blok.mount('#app', {
                       ]},
                     ]}},
                     { div: { class: 'card-actions', children: [
+                      { button: {
+                        class: ['fav-btn', { active: $.s._isFav }],
+                        click: 'toggleFavorite(s.id)',
+                        bind: { title: 'Pin session to the top of its project' },
+                        text: '★',
+                      }},
                       { when: $.s._isHidden, children: [
                         { button: {
                           class: 'restore-btn',
