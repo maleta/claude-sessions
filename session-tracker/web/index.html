@@ -292,6 +292,45 @@
     margin-bottom: 10px;
     white-space: pre-wrap;
   }
+  .settings-wrap {
+    position: relative;
+    margin-left: auto;
+  }
+  .settings-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 380px;
+    max-width: calc(100vw - 48px);
+    z-index: 10;
+    box-shadow: 0 8px 24px rgba(1, 4, 9, 0.6);
+  }
+  .panel-section + .panel-section {
+    border-top: 1px solid #30363d;
+    margin-top: 16px;
+    padding-top: 16px;
+  }
+  .panel-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .panel-section-head h3 {
+    font-size: 0.9rem;
+    color: #e6edf3;
+  }
+  .price-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 10px;
+  }
+  .price-grid label {
+    display: block;
+    font-size: 0.75rem;
+    color: #8b949e;
+    margin-bottom: 4px;
+  }
   .overlay {
     position: fixed;
     inset: 0;
@@ -399,12 +438,25 @@ function formatTokens(n) {
   return String(n);
 }
 
-// Fable 5 pricing, $ per 1M tokens (cache write = 5m TTL rate)
-const PRICE = { input: 10, output: 50, cache_read: 1, cache_write: 12.5 };
+// Defaults are Fable 5 pricing, $ per 1M tokens (cache write = 5m TTL rate)
+const COST_STORAGE_KEY = 'claude-sessions-cost';
+const COST_DEFAULTS = { enabled: true, input: 10, output: 50, cache_read: 1, cache_write: 12.5 };
 
-function tokenCost(tk) {
-  return ((tk.input || 0) * PRICE.input + (tk.output || 0) * PRICE.output +
-    (tk.cache_read || 0) * PRICE.cache_read + (tk.cache_write || 0) * PRICE.cache_write) / 1e6;
+function loadCostConfig() {
+  try {
+    const raw = localStorage.getItem(COST_STORAGE_KEY);
+    if (raw) return { ...COST_DEFAULTS, ...JSON.parse(raw) };
+  } catch (e) { /* ignore */ }
+  return { ...COST_DEFAULTS };
+}
+
+function saveCostConfig(cfg) {
+  localStorage.setItem(COST_STORAGE_KEY, JSON.stringify(cfg));
+}
+
+function tokenCost(tk, price) {
+  return ((tk.input || 0) * price.input + (tk.output || 0) * price.output +
+    (tk.cache_read || 0) * price.cache_read + (tk.cache_write || 0) * price.cache_write) / 1e6;
 }
 
 function formatCost(c) {
@@ -530,6 +582,7 @@ async function pbCreateCollection(url, email, password) {
 }
 
 const stored = loadHidden();
+const costConfig = loadCostConfig();
 let _debounceTimer = null;
 
 // Pre-process sessions once: sort, build search index, parse topics, build derived fields
@@ -560,11 +613,9 @@ const _raw = (window.SESSIONS_DATA || [])
       cr: formatTokens(tk.cache_read),
     },
     _tokTotal: tk.input + tk.output + tk.cache_write + tk.cache_read,
-    _tokCost: formatCost(tokenCost(tk)),
-    _tokTitle:
+    _tokTitleBase:
       'regular: ' + tk.input.toLocaleString() + ' in / ' + tk.output.toLocaleString() + ' out\n' +
-      'cached: ' + tk.cache_read.toLocaleString() + ' read / ' + tk.cache_write.toLocaleString() + ' write\n' +
-      'cost (Fable 5): $' + tokenCost(tk).toFixed(4),
+      'cached: ' + tk.cache_read.toLocaleString() + ' read / ' + tk.cache_write.toLocaleString() + ' write',
   };
   });
 
@@ -587,6 +638,11 @@ blok.mount('#app', {
     pbPassword: '',
     pbStatus: '',
     showSettings: false,
+    costEnabled: costConfig.enabled,
+    priceInput: String(costConfig.input),
+    priceOutput: String(costConfig.output),
+    priceCacheRead: String(costConfig.cache_read),
+    priceCacheWrite: String(costConfig.cache_write),
     tick: 0,
   },
 
@@ -602,9 +658,21 @@ blok.mount('#app', {
       clearTimeout(_debounceTimer);
       _debounceTimer = setTimeout(() => { this.search = val; }, 200);
     },
+    priceInput() { this._saveCost(); },
+    priceOutput() { this._saveCost(); },
+    priceCacheRead() { this._saveCost(); },
+    priceCacheWrite() { this._saveCost(); },
   },
 
   computed: {
+    prices() {
+      return {
+        input: Number(this.priceInput) || 0,
+        output: Number(this.priceOutput) || 0,
+        cache_read: Number(this.priceCacheRead) || 0,
+        cache_write: Number(this.priceCacheWrite) || 0,
+      };
+    },
     filtered() {
       const q = this.search.trim().toLowerCase();
       let result = this.sessions;
@@ -625,12 +693,17 @@ blok.mount('#app', {
       const hiddenPaths = new Set(this.hiddenProjectPaths);
       const favIds = new Set(this.favoriteIds);
       const notes = this.notes;
+      const prices = this.prices;
+      const costEnabled = this.costEnabled;
       for (const s of this.filtered) {
         const path = s.project_path;
         if (!map.has(path)) map.set(path, []);
         s._isHidden = hiddenIds.has(s.id);
         s._isFav = favIds.has(s.id);
         s._note = notes[s.id] || '';
+        const cost = tokenCost(s.tokens || {}, prices);
+        s._tokCost = costEnabled ? formatCost(cost) : '';
+        s._tokTitle = s._tokTitleBase + (costEnabled ? '\ncost: $' + cost.toFixed(4) : '');
         s._startLabel = 'start: ' + relativeTime(s.started_at);
         s._endLabel = s._endPrefix ? s._endPrefix + ': ' + relativeTime(s.updated_at) : '';
         map.get(path).push(s);
@@ -650,9 +723,14 @@ blok.mount('#app', {
       return s + ' session' + (s !== 1 ? 's' : '') + (this.search ? ' matching' : '') +
         ' in ' + g + ' project' + (g !== 1 ? 's' : '');
     },
-    pbBtnText() {
-      if (!this.pbUrl) return 'sync: local';
-      return this.pbStatus ? 'sync: error' : 'sync: pocketbase';
+    settingsBtnText() {
+      return this.pbStatus ? 'settings (sync error)' : 'settings';
+    },
+    costBtnText() {
+      return this.costEnabled ? 'on' : 'off';
+    },
+    storageText() {
+      return this.pbUrl ? 'PocketBase at ' + this.pbUrl : 'this browser (localStorage)';
     },
     hiddenBtnText() {
       return (this.showHidden ? 'hide' : 'show') + ' ' + this.hiddenCount + ' hidden';
@@ -663,10 +741,10 @@ blok.mount('#app', {
         const tk = s.tokens || {};
         inp += tk.input || 0; out += tk.output || 0; cw += tk.cache_write || 0; cr += tk.cache_read || 0;
       }
-      const cost = tokenCost({ input: inp, output: out, cache_read: cr, cache_write: cw });
-      return 'tokens · regular ' + formatTokens(inp) + ' in / ' + formatTokens(out) +
-        ' out · cached ' + formatTokens(cr) + ' read / ' + formatTokens(cw) + ' write · ' +
-        formatCost(cost);
+      const text = 'tokens · regular ' + formatTokens(inp) + ' in / ' + formatTokens(out) +
+        ' out · cached ' + formatTokens(cr) + ' read / ' + formatTokens(cw) + ' write';
+      if (!this.costEnabled) return text;
+      return text + ' · ' + formatCost(tokenCost({ input: inp, output: out, cache_read: cr, cache_write: cw }, this.prices));
     },
   },
 
@@ -699,7 +777,20 @@ blok.mount('#app', {
       this.editingId = '';
     },
     openSettings() {
-      this.showSettings = true;
+      this.showSettings = !this.showSettings;
+    },
+    toggleCost() {
+      this.costEnabled = !this.costEnabled;
+      this._saveCost();
+    },
+    resetPrices() {
+      this.priceInput = String(COST_DEFAULTS.input);
+      this.priceOutput = String(COST_DEFAULTS.output);
+      this.priceCacheRead = String(COST_DEFAULTS.cache_read);
+      this.priceCacheWrite = String(COST_DEFAULTS.cache_write);
+    },
+    _saveCost() {
+      saveCostConfig({ enabled: this.costEnabled, ...this.prices });
     },
     closeSettings() {
       this.showSettings = false;
@@ -812,12 +903,78 @@ blok.mount('#app', {
               text: $.hiddenBtnText,
             }},
           ]},
-          { button: {
-            class: ['toggle-hidden', { active: $.pbUrl }],
-            click: 'openSettings',
-            bind: { title: 'Where notes and favorites are stored' },
-            text: $.pbBtnText,
-          }},
+          { div: { class: 'settings-wrap', children: [
+            { button: {
+              class: ['toggle-hidden', { active: $.showSettings }],
+              click: 'openSettings',
+              text: $.settingsBtnText,
+            }},
+            { when: $.showSettings, children: [
+              { div: { class: 'panel settings-dropdown', children: [
+                { div: { class: 'panel-section', children: [
+                  { div: { class: 'panel-section-head', children: [
+                    { h3: 'Cost display' },
+                    { button: {
+                      class: ['toggle-hidden', { active: $.costEnabled }],
+                      click: 'toggleCost',
+                      text: $.costBtnText,
+                    }},
+                  ]}},
+                  { when: $.costEnabled, children: [
+                    { div: { class: 'panel-hint', text: '$ per 1M tokens' } },
+                    { div: { class: 'price-grid', children: [
+                      { div: { children: [
+                        { label: 'input' },
+                        { input: { class: 'panel-field', type: 'number', bind: { min: '0', step: 'any' }, model: $.priceInput } },
+                      ]}},
+                      { div: { children: [
+                        { label: 'output' },
+                        { input: { class: 'panel-field', type: 'number', bind: { min: '0', step: 'any' }, model: $.priceOutput } },
+                      ]}},
+                      { div: { children: [
+                        { label: 'cache read' },
+                        { input: { class: 'panel-field', type: 'number', bind: { min: '0', step: 'any' }, model: $.priceCacheRead } },
+                      ]}},
+                      { div: { children: [
+                        { label: 'cache write' },
+                        { input: { class: 'panel-field', type: 'number', bind: { min: '0', step: 'any' }, model: $.priceCacheWrite } },
+                      ]}},
+                    ]}},
+                    { div: { class: 'panel-actions', children: [
+                      { button: { class: 'resume-btn', click: 'resetPrices', text: 'reset to Fable 5' } },
+                    ]}},
+                  ]},
+                ]}},
+                { div: { class: 'panel-section', children: [
+                  { div: { class: 'panel-section-head', children: [
+                    { h3: 'Notes & favorites storage' },
+                  ]}},
+                  { div: { class: 'panel-hint', text: $.storageText } },
+                  { div: { class: 'panel-status', text: $.pbStatus } },
+                  { input: {
+                    class: 'panel-field',
+                    type: 'text',
+                    bind: { placeholder: PB_DEFAULT_URL },
+                    model: $.pbUrlInput,
+                  }},
+                  { when: $.not.pbUrl, children: [
+                    { div: { class: 'panel-hint', text: 'The superuser login is used once to create the collection and is never stored.' } },
+                    { input: { class: 'panel-field', type: 'email', bind: { placeholder: 'superuser email' }, model: $.pbEmail } },
+                    { input: { class: 'panel-field', type: 'password', bind: { placeholder: 'superuser password' }, model: $.pbPassword } },
+                  ]},
+                  { div: { class: 'panel-actions', children: [
+                    { button: { class: 'resume-btn', click: 'closeSettings', text: 'close' } },
+                    { when: $.pbUrl, children: [
+                      { button: { class: 'resume-btn', click: 'disconnectPb', text: 'use local' } },
+                    ]},
+                    { when: $.not.pbUrl, children: [
+                      { button: { class: 'resume-btn', click: 'connectPb', text: 'init config' } },
+                    ]},
+                  ]}},
+                ]}},
+              ]}},
+            ]},
+          ]}},
         ]}},
         { input: {
           class: 'search-box',
@@ -885,7 +1042,9 @@ blok.mount('#app', {
                       { span: { class: 'tok-label', text: 'cache write ' } },
                       { span: { class: 'tok-val', text: $.s._tok.cw } },
                     ]}},
-                    { span: { class: 'tok-cost', text: $.s._tokCost } },
+                    { when: $.costEnabled, children: [
+                      { span: { class: 'tok-cost', text: $.s._tokCost } },
+                    ]},
                   ]}},
                   { when: $.s._artifacts.length, children: [
                     { div: { class: 'card-artifacts', children: [
@@ -975,35 +1134,6 @@ blok.mount('#app', {
             { div: { class: 'panel-actions', children: [
               { button: { class: 'resume-btn', click: 'cancelNote', text: 'cancel' } },
               { button: { class: 'resume-btn', click: 'saveNote', text: 'save' } },
-            ]}},
-          ]}},
-        ]}},
-      ]},
-
-      { when: $.showSettings, children: [
-        { div: { class: 'overlay', children: [
-          { div: { class: 'panel', children: [
-            { h2: 'Notes & favorites storage' },
-            { div: { class: 'panel-hint', text: 'Stored in this browser by default. Point this at a running PocketBase to keep them in a database; the superuser login is used once to create the collection and is never stored.' } },
-            { div: { class: 'panel-status', text: $.pbStatus } },
-            { input: {
-              class: 'panel-field',
-              type: 'text',
-              bind: { placeholder: PB_DEFAULT_URL },
-              model: $.pbUrlInput,
-            }},
-            { when: $.not.pbUrl, children: [
-              { input: { class: 'panel-field', type: 'email', bind: { placeholder: 'superuser email' }, model: $.pbEmail } },
-              { input: { class: 'panel-field', type: 'password', bind: { placeholder: 'superuser password' }, model: $.pbPassword } },
-            ]},
-            { div: { class: 'panel-actions', children: [
-              { button: { class: 'resume-btn', click: 'closeSettings', text: 'close' } },
-              { when: $.pbUrl, children: [
-                { button: { class: 'resume-btn', click: 'disconnectPb', text: 'use local' } },
-              ]},
-              { when: $.not.pbUrl, children: [
-                { button: { class: 'resume-btn', click: 'connectPb', text: 'init config' } },
-              ]},
             ]}},
           ]}},
         ]}},
