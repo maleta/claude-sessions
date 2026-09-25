@@ -519,7 +519,18 @@ blok.mount('#app', {
       saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
     },
     copyResume(session) {
-      const cmd = 'cd ' + session.project_path + ' && claude --resume ' + session.id;
+      this._copy('cd ' + session.project_path + ' && claude-host --resume ' + session.id);
+    },
+    // Transcripts live under ~/.claude/projects/<path with every non-alphanumeric char as '-'>.
+    // The sandbox profile (~/.claude-sbx) has the same layout, so copying the .jsonl is enough.
+    copySbxResume(session) {
+      const dir = 'projects/' + session.project_path.replace(/[^A-Za-z0-9]/g, '-');
+      const cmd = 'mkdir -p ~/.claude-sbx/' + dir +
+        ' && cp -n ~/.claude/' + dir + '/' + session.id + '.jsonl ~/.claude-sbx/' + dir + '/;' +
+        ' cd ' + session.project_path + ' && claude -- --resume ' + session.id;
+      this._copy(cmd);
+    },
+    _copy(cmd) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(cmd).catch(() => this._fallbackCopy(cmd));
       } else {
@@ -666,8 +677,14 @@ blok.mount('#app', {
                       { button: {
                         class: 'resume-btn',
                         click: 'copyResume(s)',
-                        bind: { title: 'Copy resume command' },
-                        text: 'copy resume cmd',
+                        bind: { title: 'Copy resume command (native claude on the host)' },
+                        text: 'resume host',
+                      }},
+                      { button: {
+                        class: 'resume-btn',
+                        click: 'copySbxResume(s)',
+                        bind: { title: 'Copy transcript into ~/.claude-sbx and resume inside the sandbox' },
+                        text: 'resume sbx',
                       }},
                     ]}},
                   ]}},
