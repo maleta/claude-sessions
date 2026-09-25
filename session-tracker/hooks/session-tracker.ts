@@ -10,13 +10,14 @@
 
 import { mkdirSync, statSync, copyFileSync, unlinkSync } from "fs";
 import { homedir } from "os";
-import { join, basename } from "path";
+import { join, basename, dirname } from "path";
 
 const BASE_DIR = join(homedir(), ".claude", "session-tracker");
 const SESSIONS_JS_FILE = join(BASE_DIR, "sessions-data.js");
 const SUMMARIES_FILENAME = "SESSION_SUMMARIES.md";
 const WEB_UI_SOURCE = join(import.meta.dir, "..", "web", "index.html");
 const WEB_UI_TARGET = join(BASE_DIR, "index.html");
+const WEB_UI_LOCAL_OVERRIDE = join(BASE_DIR, "index.local.html");
 
 const FIRST_THRESHOLD = 1;
 const RE_ANALYSIS_INTERVAL = 5;
@@ -369,6 +370,25 @@ async function getGitBranch(cwd: string): Promise<string> {
   return "n/a";
 }
 
+// -- Project path resolution --
+
+// Claude Code stores transcripts under ~/.claude/projects/<escaped-launch-dir>/,
+// fixed at session start; hookInput.cwd drifts when the session cd's elsewhere.
+function escapeProjectDir(path: string): string {
+  return path.replace(/[^a-zA-Z0-9]/g, "-");
+}
+
+function resolveProjectPath(cwd: string, transcriptPath: string, persisted?: string): string {
+  const projectDirName = basename(dirname(transcriptPath));
+  if (persisted && escapeProjectDir(persisted) === projectDirName) return persisted;
+  let candidate = cwd;
+  while (candidate && candidate !== dirname(candidate)) {
+    if (escapeProjectDir(candidate) === projectDirName) return candidate;
+    candidate = dirname(candidate);
+  }
+  return persisted || cwd;
+}
+
 // -- Per-project summaries --
 
 async function isSummaryEnabled(cwd: string): Promise<boolean> {
@@ -590,8 +610,9 @@ async function main(): Promise<void> {
   }
 
   const now = new Date().toISOString().replace("T", " ").slice(0, 16);
-  const branch = await getGitBranch(cwd);
-  const projectName = cwd ? basename(cwd) : "unknown";
+  const projectPath = resolveProjectPath(cwd, transcriptPath, existing?.project_path);
+  const branch = await getGitBranch(projectPath);
+  const projectName = projectPath ? basename(projectPath) : "unknown";
   const isFirstAnalysis = effectiveLastAnalyzed === 0;
   const priorSummaries = isTranscriptReset ? [] : (existing?.summaries ?? []);
 
@@ -659,7 +680,7 @@ async function main(): Promise<void> {
     started_at: freshExisting?.started_at ?? existing?.started_at ?? now,
     updated_at: now,
     project: projectName,
-    project_path: cwd,
+    project_path: projectPath,
     branch,
     title: summary.title ?? freshExisting?.title ?? "Untitled session",
     summary: summary.summary ?? "No summary available.",
