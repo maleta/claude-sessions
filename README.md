@@ -55,6 +55,8 @@ open ~/.claude/session-tracker/index.html
 
 The web UI is auto-provisioned by the hook on first run. Features: search, project grouping, status badges, hide/restore, copy resume commands.
 
+To customize the UI without losing changes on plugin updates, save your modified copy as `~/.claude/session-tracker/index.local.html` - when present, it is provisioned instead of the bundled one.
+
 ### Configuration
 
 Disable `SESSION_SUMMARIES.md` for a specific project by adding to `<project>/.claude/settings.local.json`:

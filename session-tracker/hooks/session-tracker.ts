@@ -563,7 +563,16 @@ function shouldAnalyze(msgCount: number, lastAnalyzedAt: number): boolean {
 function provisionWebUI(): void {
   mkdirSync(BASE_DIR, { recursive: true });
   try {
-    const srcStat = statSync(WEB_UI_SOURCE);
+    // A user-customized UI at index.local.html takes precedence over the
+    // plugin's bundled one, so plugin updates never clobber local changes.
+    let source = WEB_UI_LOCAL_OVERRIDE;
+    let srcStat;
+    try {
+      srcStat = statSync(source);
+    } catch {
+      source = WEB_UI_SOURCE;
+      srcStat = statSync(source);
+    }
     let needsCopy = true;
     try {
       const dstStat = statSync(WEB_UI_TARGET);
@@ -572,7 +581,7 @@ function provisionWebUI(): void {
       // Target doesn't exist
     }
     if (needsCopy) {
-      copyFileSync(WEB_UI_SOURCE, WEB_UI_TARGET);
+      copyFileSync(source, WEB_UI_TARGET);
     }
   } catch {
     // Source not found - skip (e.g. running outside plugin context)
