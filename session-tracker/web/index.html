@@ -438,9 +438,13 @@ function formatTokens(n) {
   return String(n);
 }
 
-// Defaults are Fable 5 pricing, $ per 1M tokens (cache write = 5m TTL rate)
+// $ per 1M tokens (cache write = 5m TTL rate)
+const PRICE_PRESETS = {
+  fable: { input: 10, output: 50, cache_read: 0.25, cache_write: 12.5 },
+  opus: { input: 4, output: 20, cache_read: 0.2, cache_write: 5 },
+};
 const COST_STORAGE_KEY = 'claude-sessions-cost';
-const COST_DEFAULTS = { enabled: true, input: 10, output: 50, cache_read: 1, cache_write: 12.5 };
+const COST_DEFAULTS = { enabled: true, ...PRICE_PRESETS.fable };
 
 function loadCostConfig() {
   try {
@@ -452,6 +456,12 @@ function loadCostConfig() {
 
 function saveCostConfig(cfg) {
   localStorage.setItem(COST_STORAGE_KEY, JSON.stringify(cfg));
+}
+
+const SPLIT_RESUME_STORAGE_KEY = 'claude-sessions-split-resume';
+
+function loadSplitResume() {
+  return localStorage.getItem(SPLIT_RESUME_STORAGE_KEY) === 'true';
 }
 
 function tokenCost(tk, price) {
@@ -489,10 +499,6 @@ function loadFavorites() {
   return [];
 }
 
-function saveFavorites(ids) {
-  localStorage.setItem(FAV_STORAGE_KEY, JSON.stringify(ids));
-}
-
 const NOTES_STORAGE_KEY = 'claude-sessions-notes';
 
 function loadNotes() {
@@ -503,10 +509,6 @@ function loadNotes() {
   return {};
 }
 
-function saveNotes(notes) {
-  localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
-}
-
 const PB_STORAGE_KEY = 'claude-sessions-pb';
 const PB_DEFAULT_URL = 'http://127.0.0.1:8090';
 const PB_COLLECTION = 'session_state';
@@ -515,6 +517,10 @@ function loadPbUrl() {
   try {
     return JSON.parse(localStorage.getItem(PB_STORAGE_KEY) || '{}').url || '';
   } catch (e) { return ''; }
+}
+
+function pbConfigured() {
+  return localStorage.getItem(PB_STORAGE_KEY) !== null;
 }
 
 function savePbUrl(url) {
@@ -628,8 +634,8 @@ blok.mount('#app', {
     showHidden: false,
     hiddenSessionIds: stored.sessions,
     hiddenProjectPaths: stored.projects,
-    favoriteIds: loadFavorites(),
-    notes: loadNotes(),
+    favoriteIds: [],
+    notes: {},
     editingId: '',
     noteDraft: '',
     pbUrl: loadPbUrl(),
@@ -637,8 +643,10 @@ blok.mount('#app', {
     pbEmail: '',
     pbPassword: '',
     pbStatus: '',
+    pbLive: false,
     showSettings: false,
     costEnabled: costConfig.enabled,
+    splitResume: loadSplitResume(),
     priceInput: String(costConfig.input),
     priceOutput: String(costConfig.output),
     priceCacheRead: String(costConfig.cache_read),
@@ -652,10 +660,11 @@ blok.mount('#app', {
       if (!this.pbUrl) return;
       this.loadFromPb()
         .then(() => { this.pbStatus = ''; })
-        .catch(err => { this.pbStatus = 'PocketBase unreachable: ' + err.message; });
+        .catch(err => { this.pbStatus = 'PocketBase unreachable: ' + err.message; this.pbLive = false; });
     };
-    refresh();
-    window.addEventListener('focus', refresh);
+    const sync = () => { if (pbConfigured()) refresh(); else this.adoptDefaultPb(); };
+    sync();
+    window.addEventListener('focus', sync);
   },
 
   watch: {
@@ -696,8 +705,8 @@ blok.mount('#app', {
       const map = new Map();
       const hiddenIds = new Set(this.hiddenSessionIds);
       const hiddenPaths = new Set(this.hiddenProjectPaths);
-      const favIds = new Set(this.favoriteIds);
-      const notes = this.notes;
+      const favIds = new Set(this.pbLive ? this.favoriteIds : []);
+      const notes = this.pbLive ? this.notes : {};
       const prices = this.prices;
       const costEnabled = this.costEnabled;
       for (const s of this.filtered) {
@@ -731,11 +740,14 @@ blok.mount('#app', {
     settingsBtnText() {
       return this.pbStatus ? 'settings (sync error)' : 'settings';
     },
+    splitResumeBtnText() {
+      return this.splitResume ? 'on' : 'off';
+    },
     costBtnText() {
       return this.costEnabled ? 'on' : 'off';
     },
     storageText() {
-      return this.pbUrl ? 'PocketBase at ' + this.pbUrl : 'this browser (localStorage)';
+      return this.pbUrl ? 'PocketBase at ' + this.pbUrl : 'not connected, notes and favorites are off';
     },
     hiddenBtnText() {
       return (this.showHidden ? 'hide' : 'show') + ' ' + this.hiddenCount + ' hidden';
@@ -761,7 +773,6 @@ blok.mount('#app', {
       this.favoriteIds = this.favoriteIds.includes(id)
         ? this.favoriteIds.filter(x => x !== id)
         : [...this.favoriteIds, id];
-      saveFavorites(this.favoriteIds);
       this._syncSession(id, { favorite: this.favoriteIds.includes(id) });
     },
     editNote(id) {
@@ -777,7 +788,6 @@ blok.mount('#app', {
       const notes = { ...this.notes };
       if (text) notes[id] = text; else delete notes[id];
       this.notes = notes;
-      saveNotes(notes);
       this._syncSession(id, { note: text });
       this.editingId = '';
     },
@@ -788,11 +798,21 @@ blok.mount('#app', {
       this.costEnabled = !this.costEnabled;
       this._saveCost();
     },
-    resetPrices() {
-      this.priceInput = String(COST_DEFAULTS.input);
-      this.priceOutput = String(COST_DEFAULTS.output);
-      this.priceCacheRead = String(COST_DEFAULTS.cache_read);
-      this.priceCacheWrite = String(COST_DEFAULTS.cache_write);
+    resetToOpus() {
+      this._applyPrices(PRICE_PRESETS.opus);
+    },
+    resetToFable() {
+      this._applyPrices(PRICE_PRESETS.fable);
+    },
+    _applyPrices(p) {
+      this.priceInput = String(p.input);
+      this.priceOutput = String(p.output);
+      this.priceCacheRead = String(p.cache_read);
+      this.priceCacheWrite = String(p.cache_write);
+    },
+    toggleSplitResume() {
+      this.splitResume = !this.splitResume;
+      localStorage.setItem(SPLIT_RESUME_STORAGE_KEY, String(this.splitResume));
     },
     _saveCost() {
       saveCostConfig({ enabled: this.costEnabled, ...this.prices });
@@ -806,28 +826,45 @@ blok.mount('#app', {
       this.pbStatus = 'connecting...';
       try {
         await pbCreateCollection(url, this.pbEmail.trim(), this.pbPassword);
-        const remote = new Map((await pbFetchState(url)).map(r => [r.session_id, r]));
-        const ids = new Set([...Object.keys(this.notes), ...this.favoriteIds]);
-        for (const id of ids) {
-          const r = remote.get(id);
-          const fields = {};
-          if (this.notes[id] && !r?.note) fields.note = this.notes[id];
-          if (this.favoriteIds.includes(id) && !r?.favorite) fields.favorite = true;
-          if (Object.keys(fields).length) await pbUpsert(url, id, fields);
-        }
-        savePbUrl(url);
-        this.pbUrl = url;
-        await this.loadFromPb();
+        await this._joinPb(url);
         this.pbStatus = '';
         this.closeSettings();
       } catch (err) {
         this.pbStatus = 'init failed: ' + err.message;
       }
     },
+    // A browser that never chose a storage joins a PocketBase already running at the default URL.
+    async adoptDefaultPb() {
+      try {
+        await pbFetchState(PB_DEFAULT_URL);
+      } catch (e) { return; }
+      this._joinPb(PB_DEFAULT_URL)
+        .catch(err => { this.pbStatus = 'sync failed: ' + err.message; });
+    },
+    // Notes and favorites kept in localStorage by older versions are moved into PocketBase once.
+    async _joinPb(url) {
+      const remote = new Map((await pbFetchState(url)).map(r => [r.session_id, r]));
+      const localNotes = loadNotes();
+      const localFavs = loadFavorites();
+      const ids = new Set([...Object.keys(localNotes), ...localFavs]);
+      for (const id of ids) {
+        const r = remote.get(id);
+        const fields = {};
+        if (localNotes[id] && !r?.note) fields.note = localNotes[id];
+        if (localFavs.includes(id) && !r?.favorite) fields.favorite = true;
+        if (Object.keys(fields).length) await pbUpsert(url, id, fields);
+      }
+      localStorage.removeItem(NOTES_STORAGE_KEY);
+      localStorage.removeItem(FAV_STORAGE_KEY);
+      savePbUrl(url);
+      this.pbUrl = url;
+      await this.loadFromPb();
+    },
     disconnectPb() {
       savePbUrl('');
       this.pbUrl = '';
       this.pbStatus = '';
+      this.pbLive = false;
     },
     async loadFromPb() {
       const items = await pbFetchState(this.pbUrl);
@@ -839,14 +876,13 @@ blok.mount('#app', {
       }
       this.notes = notes;
       this.favoriteIds = favs;
-      saveNotes(notes);
-      saveFavorites(favs);
+      this.pbLive = true;
     },
     _syncSession(id, fields) {
       if (!this.pbUrl) return;
       pbUpsert(this.pbUrl, id, fields)
         .then(() => { this.pbStatus = ''; })
-        .catch(err => { this.pbStatus = 'sync failed: ' + err.message; });
+        .catch(err => { this.pbStatus = 'sync failed: ' + err.message; this.pbLive = false; });
     },
     hideSession(id) {
       if (this.hiddenSessionIds.includes(id)) return;
@@ -865,6 +901,9 @@ blok.mount('#app', {
     restoreProject(path) {
       this.hiddenProjectPaths = this.hiddenProjectPaths.filter(x => x !== path);
       saveHidden(this.hiddenSessionIds, this.hiddenProjectPaths);
+    },
+    copyPlainResume(session) {
+      this._copy('cd ' + session.project_path + ' && claude --resume ' + session.id);
     },
     copyResume(session) {
       this._copy('cd ' + session.project_path + ' && claude-host --resume ' + session.id);
@@ -951,9 +990,20 @@ blok.mount('#app', {
                       ]}},
                     ]}},
                     { div: { class: 'panel-actions', children: [
-                      { button: { class: 'resume-btn', click: 'resetPrices', text: 'reset to Fable 5' } },
+                      { button: { class: 'resume-btn', click: 'resetToOpus', text: 'reset to Opus 5.5' } },
+                      { button: { class: 'resume-btn', click: 'resetToFable', text: 'reset to Fable 5.1' } },
                     ]}},
                   ]},
+                ]}},
+                { div: { class: 'panel-section', children: [
+                  { div: { class: 'panel-section-head', children: [
+                    { h3: 'Host / sandbox resume' },
+                    { button: {
+                      class: ['toggle-hidden', { active: $.splitResume }],
+                      click: 'toggleSplitResume',
+                      text: $.splitResumeBtnText,
+                    }},
+                  ]}},
                 ]}},
                 { div: { class: 'panel-section', children: [
                   { div: { class: 'panel-section-head', children: [
@@ -975,7 +1025,7 @@ blok.mount('#app', {
                   { div: { class: 'panel-actions', children: [
                     { button: { class: 'resume-btn', click: 'closeSettings', text: 'close' } },
                     { when: $.pbUrl, children: [
-                      { button: { class: 'resume-btn', click: 'disconnectPb', text: 'use local' } },
+                      { button: { class: 'resume-btn', click: 'disconnectPb', text: 'disconnect' } },
                     ]},
                     { when: $.not.pbUrl, children: [
                       { button: { class: 'resume-btn', click: 'connectPb', text: 'init config' } },
@@ -1079,18 +1129,20 @@ blok.mount('#app', {
                       ]},
                     ]}},
                     { div: { class: 'card-actions', children: [
-                      { button: {
-                        class: ['note-btn', { 'has-note': $.s._note }],
-                        click: 'editNote(s.id)',
-                        bind: { title: 'Add or edit a note for this session' },
-                        text: 'note',
-                      }},
-                      { button: {
-                        class: ['fav-btn', { active: $.s._isFav }],
-                        click: 'toggleFavorite(s.id)',
-                        bind: { title: 'Pin session to the top of its project' },
-                        text: '★',
-                      }},
+                      { when: $.pbLive, children: [
+                        { button: {
+                          class: ['note-btn', { 'has-note': $.s._note }],
+                          click: 'editNote(s.id)',
+                          bind: { title: 'Add or edit a note for this session' },
+                          text: 'note',
+                        }},
+                        { button: {
+                          class: ['fav-btn', { active: $.s._isFav }],
+                          click: 'toggleFavorite(s.id)',
+                          bind: { title: 'Pin session to the top of its project' },
+                          text: '★',
+                        }},
+                      ]},
                       { when: $.s._isHidden, children: [
                         { button: {
                           class: 'restore-btn',
@@ -1105,18 +1157,28 @@ blok.mount('#app', {
                           text: 'hide',
                         }},
                       ]},
-                      { button: {
-                        class: 'resume-btn',
-                        click: 'copyResume(s)',
-                        bind: { title: 'Copy resume command (native claude on the host)' },
-                        text: 'resume host',
-                      }},
-                      { button: {
-                        class: 'resume-btn',
-                        click: 'copySbxResume(s)',
-                        bind: { title: 'Copy transcript into ~/.claude-sbx and resume inside the sandbox' },
-                        text: 'resume sbx',
-                      }},
+                      { when: $.splitResume, children: [
+                        { button: {
+                          class: 'resume-btn',
+                          click: 'copyResume(s)',
+                          bind: { title: 'Copy resume command (native claude on the host)' },
+                          text: 'resume host',
+                        }},
+                        { button: {
+                          class: 'resume-btn',
+                          click: 'copySbxResume(s)',
+                          bind: { title: 'Copy transcript into ~/.claude-sbx and resume inside the sandbox' },
+                          text: 'resume sbx',
+                        }},
+                      ]},
+                      { when: $.not.splitResume, children: [
+                        { button: {
+                          class: 'resume-btn',
+                          click: 'copyPlainResume(s)',
+                          bind: { title: 'Copy resume command' },
+                          text: 'resume',
+                        }},
+                      ]},
                     ]}},
                   ]}},
                 ]}},
