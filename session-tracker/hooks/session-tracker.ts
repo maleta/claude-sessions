@@ -17,7 +17,6 @@ const SESSIONS_JS_FILE = join(BASE_DIR, "sessions-data.js");
 const SUMMARIES_FILENAME = "SESSION_SUMMARIES.md";
 const WEB_UI_SOURCE = join(import.meta.dir, "..", "web", "index.html");
 const WEB_UI_TARGET = join(BASE_DIR, "index.html");
-const WEB_UI_LOCAL_OVERRIDE = join(BASE_DIR, "index.local.html");
 
 const FIRST_THRESHOLD = 1;
 const RE_ANALYSIS_INTERVAL = 5;
@@ -563,16 +562,7 @@ function shouldAnalyze(msgCount: number, lastAnalyzedAt: number): boolean {
 function provisionWebUI(): void {
   mkdirSync(BASE_DIR, { recursive: true });
   try {
-    // A user-customized UI at index.local.html takes precedence over the
-    // plugin's bundled one, so plugin updates never clobber local changes.
-    let source = WEB_UI_LOCAL_OVERRIDE;
-    let srcStat;
-    try {
-      srcStat = statSync(source);
-    } catch {
-      source = WEB_UI_SOURCE;
-      srcStat = statSync(source);
-    }
+    const srcStat = statSync(WEB_UI_SOURCE);
     let needsCopy = true;
     try {
       const dstStat = statSync(WEB_UI_TARGET);
@@ -581,7 +571,7 @@ function provisionWebUI(): void {
       // Target doesn't exist
     }
     if (needsCopy) {
-      copyFileSync(source, WEB_UI_TARGET);
+      copyFileSync(WEB_UI_SOURCE, WEB_UI_TARGET);
     }
   } catch {
     // Source not found - skip (e.g. running outside plugin context)

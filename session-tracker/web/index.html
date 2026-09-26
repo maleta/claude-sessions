@@ -295,7 +295,26 @@
   .settings-wrap {
     position: relative;
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
+  .db-state {
+    font-size: 0.8rem;
+    color: #8b949e;
+    white-space: nowrap;
+  }
+  .db-state::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    background: #484f58;
+  }
+  .db-state.db-establishing::before { background: #d29922; }
+  .db-state.db-on::before { background: #3fb950; }
   .panel.settings-dropdown {
     position: absolute;
     top: calc(100% + 6px);
@@ -464,6 +483,23 @@ function loadSplitResume() {
   return localStorage.getItem(SPLIT_RESUME_STORAGE_KEY) === 'true';
 }
 
+// Placeholders: {path} project path, {id} session id, {dir} transcript folder name
+// (the project path with every non-alphanumeric char as '-', as under ~/.claude/projects).
+const RESUME_DEFAULTS = {
+  resume_host: 'cd {path} && claude-host --resume {id}',
+  resume_sbx: 'mkdir -p ~/.claude-sbx/projects/{dir} && cp -n ~/.claude/projects/{dir}/{id}.jsonl ~/.claude-sbx/projects/{dir}/;' +
+    ' cd {path} && claude -- --resume {id}',
+};
+
+function fillResume(template, session) {
+  const vars = {
+    path: session.project_path,
+    id: session.id,
+    dir: session.project_path.replace(/[^A-Za-z0-9]/g, '-'),
+  };
+  return template.replace(/\{(path|id|dir)\}/g, (_, k) => vars[k]);
+}
+
 function tokenCost(tk, price) {
   return ((tk.input || 0) * price.input + (tk.output || 0) * price.output +
     (tk.cache_read || 0) * price.cache_read + (tk.cache_write || 0) * price.cache_write) / 1e6;
@@ -512,6 +548,26 @@ function loadNotes() {
 const PB_STORAGE_KEY = 'claude-sessions-pb';
 const PB_DEFAULT_URL = 'http://127.0.0.1:8090';
 const PB_COLLECTION = 'session_state';
+const PB_SETTINGS_COLLECTION = 'tracker_settings';
+const PB_COLLECTIONS = [
+  {
+    name: PB_COLLECTION,
+    fields: [
+      { name: 'session_id', type: 'text', required: true },
+      { name: 'note', type: 'text' },
+      { name: 'favorite', type: 'bool' },
+    ],
+    indexes: ['CREATE UNIQUE INDEX idx_' + PB_COLLECTION + '_session ON ' + PB_COLLECTION + ' (session_id)'],
+  },
+  {
+    name: PB_SETTINGS_COLLECTION,
+    fields: [
+      { name: 'resume_host', type: 'text' },
+      { name: 'resume_sbx', type: 'text' },
+    ],
+    indexes: [],
+  },
+];
 
 function loadPbUrl() {
   try {
@@ -532,14 +588,29 @@ async function pbRequest(url, path, options = {}) {
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = new Error(body.message || 'HTTP ' + res.status);
+    err.status = res.status;
     err.body = body;
     throw err;
   }
   return body;
 }
 
-function pbRecords(path = '') {
-  return '/api/collections/' + PB_COLLECTION + '/records' + path;
+function pbRecords(path = '', collection = PB_COLLECTION) {
+  return '/api/collections/' + collection + '/records' + path;
+}
+
+// The settings collection holds a single record.
+async function pbFetchSettings(url) {
+  const body = await pbRequest(url, pbRecords('?perPage=1', PB_SETTINGS_COLLECTION));
+  return (body.items || [])[0] || null;
+}
+
+async function pbSaveSettings(url, id, fields) {
+  return pbRequest(url, pbRecords(id ? '/' + id : '', PB_SETTINGS_COLLECTION), {
+    method: id ? 'PATCH' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  });
 }
 
 async function pbFetchState(url) {
@@ -558,38 +629,52 @@ async function pbUpsert(url, sessionId, fields) {
   });
 }
 
+// Returns the names of required collections that do not exist; throws when PocketBase is unreachable.
+async function pbMissingCollections(url) {
+  const missing = [];
+  for (const c of PB_COLLECTIONS) {
+    try {
+      await pbRequest(url, pbRecords('?perPage=1', c.name));
+    } catch (err) {
+      if (err.status !== 404) throw err;
+      missing.push(c.name);
+    }
+  }
+  return missing;
+}
+
 // Superuser credentials are used for this one call and never stored.
-// The collection has open rules, so later reads and writes need no auth.
-async function pbCreateCollection(url, email, password) {
+// The collections have open rules, so later reads and writes need no auth.
+async function pbCreateCollections(url, email, password, names) {
   const auth = await pbRequest(url, '/api/collections/_superusers/auth-with-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ identity: email, password }),
   });
-  try {
-    await pbRequest(url, '/api/collections', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: auth.token },
-      body: JSON.stringify({
-        name: PB_COLLECTION,
-        type: 'base',
-        listRule: '', viewRule: '', createRule: '', updateRule: '', deleteRule: '',
-        fields: [
-          { name: 'session_id', type: 'text', required: true },
-          { name: 'note', type: 'text' },
-          { name: 'favorite', type: 'bool' },
-        ],
-        indexes: ['CREATE UNIQUE INDEX idx_' + PB_COLLECTION + '_session ON ' + PB_COLLECTION + ' (session_id)'],
-      }),
-    });
-  } catch (err) {
-    if (err.body?.data?.name?.code !== 'validation_collection_name_exists') throw err;
+  for (const c of PB_COLLECTIONS.filter(c => names.includes(c.name))) {
+    try {
+      await pbRequest(url, '/api/collections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: auth.token },
+        body: JSON.stringify({
+          name: c.name,
+          type: 'base',
+          listRule: '', viewRule: '', createRule: '', updateRule: '', deleteRule: '',
+          fields: c.fields,
+          indexes: c.indexes,
+        }),
+      });
+    } catch (err) {
+      if (err.body?.data?.name?.code !== 'validation_collection_name_exists') throw err;
+    }
   }
 }
 
 const stored = loadHidden();
 const costConfig = loadCostConfig();
 let _debounceTimer = null;
+let _resumeSaveTimer = null;
+let _resumeSaved = { ...RESUME_DEFAULTS };
 
 // Pre-process sessions once: sort, build search index, parse topics, build derived fields
 const _raw = (window.SESSIONS_DATA || [])
@@ -647,6 +732,11 @@ blok.mount('#app', {
     showSettings: false,
     costEnabled: costConfig.enabled,
     splitResume: loadSplitResume(),
+    resumeHost: RESUME_DEFAULTS.resume_host,
+    resumeSbx: RESUME_DEFAULTS.resume_sbx,
+    settingsId: '',
+    pbMissing: [],
+    pbInitsRunning: 0,
     priceInput: String(costConfig.input),
     priceOutput: String(costConfig.output),
     priceCacheRead: String(costConfig.cache_read),
@@ -658,8 +748,7 @@ blok.mount('#app', {
     setInterval(() => { this.tick++; }, 60000);
     const refresh = () => {
       if (!this.pbUrl) return;
-      this.loadFromPb()
-        .then(() => { this.pbStatus = ''; })
+      this.initPb(this.pbUrl)
         .catch(err => { this.pbStatus = 'PocketBase unreachable: ' + err.message; this.pbLive = false; });
     };
     const sync = () => { if (pbConfigured()) refresh(); else this.adoptDefaultPb(); };
@@ -676,6 +765,8 @@ blok.mount('#app', {
     priceOutput() { this._saveCost(); },
     priceCacheRead() { this._saveCost(); },
     priceCacheWrite() { this._saveCost(); },
+    resumeHost() { this._saveResume(); },
+    resumeSbx() { this._saveResume(); },
   },
 
   computed: {
@@ -737,7 +828,19 @@ blok.mount('#app', {
       return s + ' session' + (s !== 1 ? 's' : '') + (this.search ? ' matching' : '') +
         ' in ' + g + ' project' + (g !== 1 ? 's' : '');
     },
+    // A background re-check of a live connection keeps showing on.
+    dbState() {
+      if (this.pbLive) return 'on';
+      return this.pbInitsRunning > 0 ? 'establishing' : 'off';
+    },
+    dbStateClass() {
+      return 'db-state db-' + this.dbState;
+    },
+    dbStateText() {
+      return 'db ' + this.dbState;
+    },
     settingsBtnText() {
+      if (this.pbMissing.length) return 'settings (setup needed)';
       return this.pbStatus ? 'settings (sync error)' : 'settings';
     },
     splitResumeBtnText() {
@@ -745,6 +848,16 @@ blok.mount('#app', {
     },
     costBtnText() {
       return this.costEnabled ? 'on' : 'off';
+    },
+    resumeHint() {
+      if (!this.pbLive) return 'Connect PocketBase to edit these commands.';
+      return 'Placeholders: {path} project path, {id} session id, {dir} transcript folder name.';
+    },
+    resumeLocked() {
+      return !this.pbLive;
+    },
+    needsLogin() {
+      return !this.pbUrl || this.pbMissing.length > 0;
     },
     storageText() {
       return this.pbUrl ? 'PocketBase at ' + this.pbUrl : 'not connected, notes and favorites are off';
@@ -814,6 +927,22 @@ blok.mount('#app', {
       this.splitResume = !this.splitResume;
       localStorage.setItem(SPLIT_RESUME_STORAGE_KEY, String(this.splitResume));
     },
+    resetResume() {
+      this.resumeHost = RESUME_DEFAULTS.resume_host;
+      this.resumeSbx = RESUME_DEFAULTS.resume_sbx;
+    },
+    // Watchers fire on every keystroke and on loads from PocketBase; only a changed value is written.
+    _saveResume() {
+      if (!this.pbLive) return;
+      clearTimeout(_resumeSaveTimer);
+      _resumeSaveTimer = setTimeout(() => {
+        const fields = { resume_host: this.resumeHost, resume_sbx: this.resumeSbx };
+        if (fields.resume_host === _resumeSaved.resume_host && fields.resume_sbx === _resumeSaved.resume_sbx) return;
+        pbSaveSettings(this.pbUrl, this.settingsId, fields)
+          .then(rec => { this.settingsId = rec.id; _resumeSaved = fields; this.pbStatus = ''; })
+          .catch(err => { this.pbStatus = 'settings save failed: ' + err.message; });
+      }, 500);
+    },
     _saveCost() {
       saveCostConfig({ enabled: this.costEnabled, ...this.prices });
     },
@@ -823,23 +952,46 @@ blok.mount('#app', {
     },
     async connectPb() {
       const url = this.pbUrlInput.trim() || PB_DEFAULT_URL;
+      const email = this.pbEmail.trim();
       this.pbStatus = 'connecting...';
       try {
-        await pbCreateCollection(url, this.pbEmail.trim(), this.pbPassword);
-        await this._joinPb(url);
-        this.pbStatus = '';
-        this.closeSettings();
+        await this.initPb(url, email ? { email, password: this.pbPassword } : null);
+        if (this.pbLive) this.closeSettings();
       } catch (err) {
         this.pbStatus = 'init failed: ' + err.message;
       }
     },
-    // A browser that never chose a storage joins a PocketBase already running at the default URL.
+    // A browser that never chose a storage joins a PocketBase at the default URL that already holds a tracker collection.
     async adoptDefaultPb() {
+      let missing;
       try {
-        await pbFetchState(PB_DEFAULT_URL);
+        missing = await pbMissingCollections(PB_DEFAULT_URL);
       } catch (e) { return; }
-      this._joinPb(PB_DEFAULT_URL)
+      if (missing.length === PB_COLLECTIONS.length) return;
+      this.initPb(PB_DEFAULT_URL)
         .catch(err => { this.pbStatus = 'sync failed: ' + err.message; });
+    },
+    // Run on every connection: makes sure every required collection exists, then loads the data.
+    // Creating a missing collection needs the superuser login; without one the page stays offline and asks for it.
+    async initPb(url, login = null) {
+      this.pbInitsRunning++;
+      try {
+        let missing = await pbMissingCollections(url);
+        if (missing.length && login) {
+          await pbCreateCollections(url, login.email, login.password, missing);
+          missing = [];
+        }
+        this.pbMissing = missing;
+        if (missing.length) {
+          this.pbLive = false;
+          this.pbStatus = 'missing collections: ' + missing.join(', ') + '. Enter the superuser login to create them.';
+          return;
+        }
+        await this._joinPb(url);
+        this.pbStatus = '';
+      } finally {
+        this.pbInitsRunning--;
+      }
     },
     // Notes and favorites kept in localStorage by older versions are moved into PocketBase once.
     async _joinPb(url) {
@@ -865,6 +1017,9 @@ blok.mount('#app', {
       this.pbUrl = '';
       this.pbStatus = '';
       this.pbLive = false;
+      this.pbMissing = [];
+      this.settingsId = '';
+      this.resetResume();
     },
     async loadFromPb() {
       const items = await pbFetchState(this.pbUrl);
@@ -877,6 +1032,17 @@ blok.mount('#app', {
       this.notes = notes;
       this.favoriteIds = favs;
       this.pbLive = true;
+      await this._loadSettings();
+    },
+    async _loadSettings() {
+      const rec = await pbFetchSettings(this.pbUrl);
+      _resumeSaved = {
+        resume_host: rec?.resume_host || RESUME_DEFAULTS.resume_host,
+        resume_sbx: rec?.resume_sbx || RESUME_DEFAULTS.resume_sbx,
+      };
+      this.settingsId = rec?.id || '';
+      this.resumeHost = _resumeSaved.resume_host;
+      this.resumeSbx = _resumeSaved.resume_sbx;
     },
     _syncSession(id, fields) {
       if (!this.pbUrl) return;
@@ -906,16 +1072,10 @@ blok.mount('#app', {
       this._copy('cd ' + session.project_path + ' && claude --resume ' + session.id);
     },
     copyResume(session) {
-      this._copy('cd ' + session.project_path + ' && claude-host --resume ' + session.id);
+      this._copy(fillResume(this.resumeHost, session));
     },
-    // Transcripts live under ~/.claude/projects/<path with every non-alphanumeric char as '-'>.
-    // The sandbox profile (~/.claude-sbx) has the same layout, so copying the .jsonl is enough.
     copySbxResume(session) {
-      const dir = 'projects/' + session.project_path.replace(/[^A-Za-z0-9]/g, '-');
-      const cmd = 'mkdir -p ~/.claude-sbx/' + dir +
-        ' && cp -n ~/.claude/' + dir + '/' + session.id + '.jsonl ~/.claude-sbx/' + dir + '/;' +
-        ' cd ' + session.project_path + ' && claude -- --resume ' + session.id;
-      this._copy(cmd);
+      this._copy(fillResume(this.resumeSbx, session));
     },
     _copy(cmd) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -953,6 +1113,7 @@ blok.mount('#app', {
             }},
           ]},
           { div: { class: 'settings-wrap', children: [
+            { span: { class: $.dbStateClass, text: $.dbStateText } },
             { button: {
               class: ['toggle-hidden', { active: $.showSettings }],
               click: 'openSettings',
@@ -1004,6 +1165,18 @@ blok.mount('#app', {
                       text: $.splitResumeBtnText,
                     }},
                   ]}},
+                  { when: $.splitResume, children: [
+                    { div: { class: 'panel-hint', text: $.resumeHint } },
+                    { label: { class: 'panel-hint', text: 'resume host' } },
+                    { input: { class: 'panel-field', type: 'text', bind: { disabled: $.resumeLocked }, model: $.resumeHost } },
+                    { label: { class: 'panel-hint', text: 'resume sbx' } },
+                    { input: { class: 'panel-field', type: 'text', bind: { disabled: $.resumeLocked }, model: $.resumeSbx } },
+                    { when: $.pbLive, children: [
+                      { div: { class: 'panel-actions', children: [
+                        { button: { class: 'resume-btn', click: 'resetResume', text: 'reset to defaults' } },
+                      ]}},
+                    ]},
+                  ]},
                 ]}},
                 { div: { class: 'panel-section', children: [
                   { div: { class: 'panel-section-head', children: [
@@ -1017,8 +1190,8 @@ blok.mount('#app', {
                     bind: { placeholder: PB_DEFAULT_URL },
                     model: $.pbUrlInput,
                   }},
-                  { when: $.not.pbUrl, children: [
-                    { div: { class: 'panel-hint', text: 'The superuser login is used once to create the collection and is never stored.' } },
+                  { when: $.needsLogin, children: [
+                    { div: { class: 'panel-hint', text: 'The superuser login is only needed to create missing collections and is never stored.' } },
                     { input: { class: 'panel-field', type: 'email', bind: { placeholder: 'superuser email' }, model: $.pbEmail } },
                     { input: { class: 'panel-field', type: 'password', bind: { placeholder: 'superuser password' }, model: $.pbPassword } },
                   ]},
@@ -1027,7 +1200,7 @@ blok.mount('#app', {
                     { when: $.pbUrl, children: [
                       { button: { class: 'resume-btn', click: 'disconnectPb', text: 'disconnect' } },
                     ]},
-                    { when: $.not.pbUrl, children: [
+                    { when: $.needsLogin, children: [
                       { button: { class: 'resume-btn', click: 'connectPb', text: 'init config' } },
                     ]},
                   ]}},
@@ -1167,7 +1340,7 @@ blok.mount('#app', {
                         { button: {
                           class: 'resume-btn',
                           click: 'copySbxResume(s)',
-                          bind: { title: 'Copy transcript into ~/.claude-sbx and resume inside the sandbox' },
+                          bind: { title: 'Copy resume command (sandbox)' },
                           text: 'resume sbx',
                         }},
                       ]},
