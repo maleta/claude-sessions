@@ -69,6 +69,8 @@ Pick the summary model for all projects with `sessionTracker.model` in `~/.claud
 }
 ```
 
+With PocketBase connected, the web UI settings can override this model for all projects. The hook reads PocketBase at `http://127.0.0.1:8090`; set `sessionTracker.pocketbaseUrl` in `~/.claude/settings.json` when it runs elsewhere. An unreachable PocketBase falls back to `sessionTracker.model`.
+
 Disable `SESSION_SUMMARIES.md` for a specific project by adding to `<project>/.claude/settings.local.json`:
 
 ```json
