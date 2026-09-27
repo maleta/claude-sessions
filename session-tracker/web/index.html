@@ -552,6 +552,7 @@ function loadNotes() {
   return {};
 }
 
+const SUMMARY_MODELS = ['haiku', 'sonnet', 'opus'];
 const PB_STORAGE_KEY = 'claude-sessions-pb';
 const PB_DEFAULT_URL = 'http://127.0.0.1:8090';
 const PB_COLLECTION = 'session_state';
@@ -571,6 +572,7 @@ const PB_COLLECTIONS = [
     fields: [
       { name: 'resume_host', type: 'text' },
       { name: 'resume_sbx', type: 'text' },
+      { name: 'summary_model', type: 'text' },
     ],
     indexes: [],
   },
@@ -636,14 +638,16 @@ async function pbUpsert(url, sessionId, fields) {
   });
 }
 
-// Returns the names of required collections that do not exist; throws when PocketBase is unreachable.
+// Returns the names of required collections that do not exist or lack a field; throws when PocketBase is unreachable.
+// PocketBase drops unknown fields on write without an error, but rejects a filter on one with a 400.
 async function pbMissingCollections(url) {
   const missing = [];
   for (const c of PB_COLLECTIONS) {
+    const filter = encodeURIComponent(c.fields.map(f => f.name + ' = null').join(' || '));
     try {
-      await pbRequest(url, pbRecords('?perPage=1', c.name));
+      await pbRequest(url, pbRecords('?perPage=1&filter=' + filter, c.name));
     } catch (err) {
-      if (err.status !== 404) throw err;
+      if (err.status !== 404 && err.status !== 400) throw err;
       missing.push(c.name);
     }
   }
@@ -659,6 +663,17 @@ async function pbCreateCollections(url, email, password, names) {
     body: JSON.stringify({ identity: email, password }),
   });
   for (const c of PB_COLLECTIONS.filter(c => names.includes(c.name))) {
+    const existing = await pbRequest(url, '/api/collections/' + c.name, { headers: { Authorization: auth.token } })
+      .catch(err => { if (err.status === 404) return null; throw err; });
+    if (existing) {
+      const have = new Set(existing.fields.map(f => f.name));
+      await pbRequest(url, '/api/collections/' + existing.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: auth.token },
+        body: JSON.stringify({ fields: [...existing.fields, ...c.fields.filter(f => !have.has(f.name))] }),
+      });
+      continue;
+    }
     try {
       await pbRequest(url, '/api/collections', {
         method: 'POST',
@@ -682,6 +697,7 @@ const costConfig = loadCostConfig();
 let _debounceTimer = null;
 let _resumeSaveTimer = null;
 let _resumeSaved = { ...RESUME_DEFAULTS };
+let _modelSaved = '';
 
 // Pre-process sessions once: sort, build search index, parse topics, build derived fields
 const _raw = (window.SESSIONS_DATA || [])
@@ -742,6 +758,7 @@ blok.mount('#app', {
     splitResume: loadSplitResume(),
     resumeHost: RESUME_DEFAULTS.resume_host,
     resumeSbx: RESUME_DEFAULTS.resume_sbx,
+    summaryModel: '',
     settingsId: '',
     pbMissing: [],
     pbInitsRunning: 0,
@@ -864,6 +881,15 @@ blok.mount('#app', {
     resumeLocked() {
       return !this.pbLive;
     },
+    summaryModelOptions() {
+      return ['', ...SUMMARY_MODELS].map(value => ({ value, label: value || 'default', active: value === this.summaryModel }));
+    },
+    summaryModelHint() {
+      if (!this.pbLive) return 'Connect PocketBase to override the model. Without it, sessionTracker.model in ~/.claude/settings.json applies, sonnet by default.';
+      return this.summaryModel
+        ? 'Overrides sessionTracker.model in ~/.claude/settings.json for every project.'
+        : 'Uses sessionTracker.model from ~/.claude/settings.json, sonnet by default.';
+    },
     needsLogin() {
       return !this.pbUrl || this.pbMissing.length > 0;
     },
@@ -935,6 +961,12 @@ blok.mount('#app', {
       this.splitResume = !this.splitResume;
       localStorage.setItem(SPLIT_RESUME_STORAGE_KEY, String(this.splitResume));
     },
+    setSummaryModel(model) {
+      if (!this.pbLive || model === _modelSaved) return;
+      pbSaveSettings(this.pbUrl, this.settingsId, { summary_model: model })
+        .then(rec => { this.settingsId = rec.id; _modelSaved = model; this.summaryModel = model; this.pbStatus = ''; })
+        .catch(err => { this.pbStatus = 'settings save failed: ' + err.message; });
+    },
     resetResume() {
       this.resumeHost = RESUME_DEFAULTS.resume_host;
       this.resumeSbx = RESUME_DEFAULTS.resume_sbx;
@@ -992,7 +1024,7 @@ blok.mount('#app', {
         this.pbMissing = missing;
         if (missing.length) {
           this.pbLive = false;
-          this.pbStatus = 'missing collections: ' + missing.join(', ') + '. Enter the superuser login to create them.';
+          this.pbStatus = 'collections to create or update: ' + missing.join(', ') + '. Enter the superuser login to set them up.';
           return;
         }
         await this._joinPb(url);
@@ -1028,6 +1060,8 @@ blok.mount('#app', {
       this.pbMissing = [];
       this.settingsId = '';
       this.resetResume();
+      this.summaryModel = '';
+      _modelSaved = '';
     },
     async loadFromPb() {
       const items = await pbFetchState(this.pbUrl);
@@ -1051,6 +1085,8 @@ blok.mount('#app', {
       this.settingsId = rec?.id || '';
       this.resumeHost = _resumeSaved.resume_host;
       this.resumeSbx = _resumeSaved.resume_sbx;
+      _modelSaved = rec?.summary_model || '';
+      this.summaryModel = _modelSaved;
     },
     _syncSession(id, fields) {
       if (!this.pbUrl) return;
@@ -1188,6 +1224,19 @@ blok.mount('#app', {
                 ]}},
                 { div: { class: 'panel-section', children: [
                   { div: { class: 'panel-section-head', children: [
+                    { h3: 'Summary model' },
+                  ]}},
+                  { div: { class: 'panel-hint', text: $.summaryModelHint } },
+                  { when: $.pbLive, children: [
+                    { div: { class: 'panel-actions', children: [
+                      { each: $.summaryModelOptions, as: 'o', key: 'value', children: [
+                        { button: { class: ['toggle-hidden', { active: $.o.active }], click: 'setSummaryModel(o.value)', text: $.o.label } },
+                      ]},
+                    ]}},
+                  ]},
+                ]}},
+                { div: { class: 'panel-section', children: [
+                  { div: { class: 'panel-section-head', children: [
                     { h3: 'Notes & favorites storage' },
                   ]}},
                   { div: { class: 'panel-hint', text: $.storageText } },
@@ -1199,7 +1248,7 @@ blok.mount('#app', {
                     model: $.pbUrlInput,
                   }},
                   { when: $.needsLogin, children: [
-                    { div: { class: 'panel-hint', text: 'The superuser login is only needed to create missing collections and is never stored.' } },
+                    { div: { class: 'panel-hint', text: 'The superuser login is only needed to set up collections and is never stored.' } },
                     { input: { class: 'panel-field', type: 'email', bind: { placeholder: 'superuser email' }, model: $.pbEmail } },
                     { input: { class: 'panel-field', type: 'password', bind: { placeholder: 'superuser password' }, model: $.pbPassword } },
                   ]},
