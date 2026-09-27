@@ -1,6 +1,6 @@
 {
   "name": "session-tracker",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Automatically tracks and summarizes Claude Code sessions with per-project SESSION_SUMMARIES.md and a web UI for browsing session history",
   "author": {
     "name": "Aleksandar Maletic"
