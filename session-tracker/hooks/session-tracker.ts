@@ -24,6 +24,9 @@ const MAX_CONVERSATION_CHARS = 4000;
 const MAX_ASSISTANT_BLOCK_CHARS = 500;
 const STALE_SESSION_DAYS = 4;
 
+const SUMMARY_MODELS = ["haiku", "sonnet", "opus"];
+const DEFAULT_SUMMARY_MODEL = "sonnet";
+
 const SUMMARY_PROMPT = `Analyze this Claude Code conversation excerpt and return a JSON object with these fields:
 - "title": short descriptive title (5-10 words)
 - "summary": 2-3 sentence summary of what was discussed/accomplished
@@ -375,9 +378,9 @@ async function buildConversationText(
 
 // -- Claude CLI --
 
-async function callCli(prompt: string): Promise<SummaryResult> {
+async function callCli(prompt: string, model: string): Promise<SummaryResult> {
   const proc = Bun.spawn(
-    ["claude", "-p", "--model", "haiku", "--no-session-persistence"],
+    ["claude", "-p", "--model", model, "--no-session-persistence"],
     { stdin: new Blob([prompt]), stdout: "pipe", stderr: "pipe" }
   );
 
@@ -400,15 +403,15 @@ async function callCli(prompt: string): Promise<SummaryResult> {
   throw new Error(`No JSON found in response: ${text.slice(0, 200)}`);
 }
 
-async function analyzeConversation(conversationText: string): Promise<SummaryResult> {
+async function analyzeConversation(conversationText: string, model: string): Promise<SummaryResult> {
   const prompt = SUMMARY_PROMPT.replace("{conversation}", conversationText);
-  return callCli(prompt);
+  return callCli(prompt, model);
 }
 
-async function consolidateSummaries(summaries: string[]): Promise<SummaryResult> {
+async function consolidateSummaries(summaries: string[], model: string): Promise<SummaryResult> {
   const numbered = summaries.map((s, i) => `${i + 1}. ${s}`).join("\n");
   const prompt = FINAL_SUMMARY_PROMPT.replace("{summaries}", numbered);
-  return callCli(prompt);
+  return callCli(prompt, model);
 }
 
 // -- Git --
@@ -451,20 +454,33 @@ function resolveProjectPath(cwd: string, transcriptPath: string, persisted?: str
 
 // -- Per-project summaries --
 
-async function isSummaryEnabled(cwd: string): Promise<boolean> {
+interface TrackerConfig {
+  summaryFile?: boolean;
+  model?: string;
+}
+
+async function readTrackerConfig(settingsPath: string): Promise<TrackerConfig> {
   try {
-    const file = Bun.file(join(cwd, ".claude", "settings.local.json"));
+    const file = Bun.file(settingsPath);
     if (await file.exists()) {
-      const settings = await file.json();
-      const config = settings.sessionTracker;
-      if (config && typeof config === "object") {
-        return config.summaryFile !== false;
-      }
+      const config = (await file.json()).sessionTracker;
+      if (config && typeof config === "object") return config;
     }
   } catch {
     // Ignore parse/permission errors
   }
-  return true;
+  return {};
+}
+
+async function isSummaryEnabled(cwd: string): Promise<boolean> {
+  const config = await readTrackerConfig(join(cwd, ".claude", "settings.local.json"));
+  return config.summaryFile !== false;
+}
+
+/** Reads the summary model alias from ~/.claude/settings.json; aliases always map to the latest model of that family. */
+async function resolveSummaryModel(): Promise<string> {
+  const model = (await readTrackerConfig(join(homedir(), ".claude", "settings.json"))).model?.toLowerCase();
+  return model && SUMMARY_MODELS.includes(model) ? model : DEFAULT_SUMMARY_MODEL;
 }
 
 function escapeRegExp(str: string): string {
@@ -676,6 +692,7 @@ async function main(): Promise<void> {
   const projectName = projectPath ? basename(projectPath) : "unknown";
   const isFirstAnalysis = effectiveLastAnalyzed === 0;
   const priorSummaries = isTranscriptReset ? [] : (existing?.summaries ?? []);
+  const model = await resolveSummaryModel();
 
   if (isFinalBg) {
     console.error("See ya! Saving session summary...");
@@ -694,25 +711,25 @@ async function main(): Promise<void> {
       if (msgCount > effectiveLastAnalyzed) {
         const delta = await buildConversationText(transcriptPath, effectiveLastAnalyzed);
         if (delta.trim()) {
-          const deltaSummary = await analyzeConversation(delta);
+          const deltaSummary = await analyzeConversation(delta, model);
           if (deltaSummary.summary) updatedSummaries.push(deltaSummary.summary);
         }
       }
 
       // Consolidate all summaries into one final summary
       if (updatedSummaries.length > 1) {
-        summary = await consolidateSummaries(updatedSummaries);
+        summary = await consolidateSummaries(updatedSummaries, model);
       } else if (updatedSummaries.length === 1) {
         // Only one summary - analyze full conversation for a better final result
         const fullText = await buildConversationText(transcriptPath);
         summary = fullText.trim()
-          ? await analyzeConversation(fullText)
+          ? await analyzeConversation(fullText, model)
           : { summary: updatedSummaries[0], status: "completed" };
       } else {
         // No prior summaries at all - full analysis
         const fullText = await buildConversationText(transcriptPath);
         if (!fullText.trim()) process.exit(0);
-        summary = await analyzeConversation(fullText);
+        summary = await analyzeConversation(fullText, model);
       }
       // Override status to completed on session end
       summary.status = "completed";
@@ -723,7 +740,7 @@ async function main(): Promise<void> {
         isFirstAnalysis ? 0 : effectiveLastAnalyzed
       );
       if (!conversationText.trim()) process.exit(0);
-      summary = await analyzeConversation(conversationText);
+      summary = await analyzeConversation(conversationText, model);
       if (summary.summary) updatedSummaries.push(summary.summary);
     }
   } catch (e) {

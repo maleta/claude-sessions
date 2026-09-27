@@ -1,5 +1,5 @@
 {
-  "description": "Tracks and summarizes Claude Code sessions using Haiku",
+  "description": "Tracks and summarizes Claude Code sessions using Claude",
   "hooks": {
     "Stop": [
       {
