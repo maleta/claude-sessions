@@ -16,7 +16,7 @@ When the user asks about previous work, past sessions, or wants context on what 
 1. Read `SESSION_SUMMARIES.md` from the project root (current working directory)
 2. Parse the session entries (delimited by HTML comment markers)
 3. Present relevant sessions based on the user's query
-4. Each entry contains: title, date, branch, status, topics, session ID, and summary
+4. Each entry contains: title, date, branch, status, topics, session ID, summary, and an optional Done list of finished items
 
 If `SESSION_SUMMARIES.md` does not exist, inform the user that no session history is available for this project yet. Note: this file can be disabled per project via `sessionTracker.summaryFile: false` in `.claude/settings.local.json`.
 
@@ -37,6 +37,10 @@ Each session is wrapped in HTML comments:
 - **Resume**: `claude --resume full-uuid`
 
 Summary text here.
+
+**Done:**
+- Finished item one
+- Finished item two
 <!-- /session:UUID -->
 ```
 

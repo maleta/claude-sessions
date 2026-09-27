@@ -1,13 +1,13 @@
 # Claude Session Tracker
 
-Automatically tracks and summarizes Claude Code sessions using Claude Haiku. Provides a web UI for browsing session history and generates per-project `SESSION_SUMMARIES.md` files for context in future conversations.
+Automatically tracks and summarizes Claude Code sessions using Claude (Sonnet by default, Haiku or Opus on request). Provides a web UI for browsing session history and generates per-project `SESSION_SUMMARIES.md` files for context in future conversations.
 
 ![Claude Sessions Web UI](demo/screenshot.png)
 
 ## Features
 
-- **Automatic tracking** - Hooks fire on every response and session end
-- **AI summaries** - Claude Haiku generates title, summary, topics, and status
+- **Automatic tracking** - Hooks fire on every response, before compaction, and at session end
+- **AI summaries** - Claude generates title, summary, a list of finished items, topics, and status
 - **Per-project summaries** - `SESSION_SUMMARIES.md` in each project directory for future session context
 - **Web UI** - Search, filter, hide/restore sessions grouped by project
 - **Resume commands** - One-click copy of `claude --resume <id>` commands
@@ -16,7 +16,7 @@ Automatically tracks and summarizes Claude Code sessions using Claude Haiku. Pro
 ## Requirements
 
 - [Bun](https://bun.sh) 1.0+
-- Claude Code CLI (uses your subscription via `claude -p --model haiku` - no API credits consumed)
+- Claude Code CLI (uses your subscription via `claude -p` - no API credits consumed)
 
 ## Installation
 
@@ -34,12 +34,14 @@ That's it. The plugin auto-registers its hooks and provisions the web UI on firs
 ### Hooks
 
 - **Stop** - Fires after each Claude response. Analyzes after 1+ user messages, re-analyzes every 5 additional messages.
-- **SessionEnd** - Fires when a session ends. Consolidates all incremental summaries into a final one.
+- **PreCompact** - Fires before `/compact` or auto-compaction. Records any pending activity in the background so the Done list is up to date before the context is compacted.
+- **SessionEnd** - Fires when a session ends. Folds any remaining messages into the summary and marks the session completed.
 
 ### SESSION_SUMMARIES.md
 
 After each analysis, the hook writes/updates a `SESSION_SUMMARIES.md` file in the project directory. This file contains:
-- Session title and summary from Haiku
+- Session title and summary
+- **Done** list: concrete items finished during the session
 - Date, branch, status, message count, topics
 - Session ID and resume command
 
@@ -56,6 +58,16 @@ open ~/.claude/session-tracker/index.html
 The web UI is auto-provisioned by the hook on first run. Features: search, project grouping, status badges, hide/restore, copy resume commands.
 
 ### Configuration
+
+Pick the summary model for all projects with `sessionTracker.model` in `~/.claude/settings.json`. Accepted values are `sonnet` (default), `haiku` and `opus`; each always resolves to the latest model of that family.
+
+```json
+{
+  "sessionTracker": {
+    "model": "sonnet"
+  }
+}
+```
 
 Disable `SESSION_SUMMARIES.md` for a specific project by adding to `<project>/.claude/settings.local.json`:
 
@@ -76,7 +88,7 @@ Hook fires (Stop/SessionEnd)
   |
   v  (check threshold: 1+ messages first time, then every 5 more)
   |
-  v  (call Haiku via claude -p for summary)
+  v  (call the configured model via claude -p for summary)
   |
   v
 ~/.claude/session-tracker/sessions-data.js    <-- single source of truth

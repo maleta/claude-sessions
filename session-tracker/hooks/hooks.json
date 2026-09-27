@@ -1,5 +1,5 @@
 {
-  "description": "Tracks and summarizes Claude Code sessions using Haiku",
+  "description": "Tracks and summarizes Claude Code sessions using Claude",
   "hooks": {
     "Stop": [
       {
@@ -7,6 +7,17 @@
           {
             "type": "command",
             "command": "bun \"${CLAUDE_PLUGIN_ROOT}/hooks/session-tracker.ts\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"${CLAUDE_PLUGIN_ROOT}/hooks/session-tracker.ts\" --precompact",
             "timeout": 30
           }
         ]
