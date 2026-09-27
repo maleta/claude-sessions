@@ -6,7 +6,7 @@ Automatically tracks and summarizes Claude Code sessions using Claude (Sonnet by
 
 ## Features
 
-- **Automatic tracking** - Hooks fire on every response and session end
+- **Automatic tracking** - Hooks fire on every response, before compaction, and at session end
 - **AI summaries** - Claude generates title, summary, a list of finished items, topics, and status
 - **Per-project summaries** - `SESSION_SUMMARIES.md` in each project directory for future session context
 - **Web UI** - Search, filter, hide/restore sessions grouped by project
@@ -34,6 +34,7 @@ That's it. The plugin auto-registers its hooks and provisions the web UI on firs
 ### Hooks
 
 - **Stop** - Fires after each Claude response. Analyzes after 1+ user messages, re-analyzes every 5 additional messages.
+- **PreCompact** - Fires before `/compact` or auto-compaction. Records any pending activity in the background so the Done list is up to date before the context is compacted.
 - **SessionEnd** - Fires when a session ends. Folds any remaining messages into the summary and marks the session completed.
 
 ### SESSION_SUMMARIES.md

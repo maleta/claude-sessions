@@ -2,13 +2,14 @@
 /**
  * Session Tracker Hook for Claude Code.
  *
- * Fires on Stop (async) and SessionEnd (--final) events.
+ * Fires on Stop (async), PreCompact (--precompact) and SessionEnd (--final) events.
  * - After 1st user message: full analysis, captures started_at
  * - Every 5 messages after: delta-only analysis (new messages since last)
+ * - Before compaction: analyzes whatever is pending, regardless of the threshold
  * - On session end: folds any remaining messages into the entry and marks it completed
  */
 
-import { mkdirSync, statSync, copyFileSync, unlinkSync } from "fs";
+import { mkdirSync, statSync, copyFileSync, unlinkSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { join, basename, dirname } from "path";
 
@@ -23,6 +24,8 @@ const RE_ANALYSIS_INTERVAL = 5;
 const MAX_CONVERSATION_CHARS = 4000;
 const MAX_ASSISTANT_BLOCK_CHARS = 500;
 const STALE_SESSION_DAYS = 4;
+const LOCK_STALE_MS = 5 * 60 * 1000;
+const LOCK_POLL_MS = 1000;
 
 const SUMMARY_MODELS = ["haiku", "sonnet", "opus"];
 const DEFAULT_SUMMARY_MODEL = "sonnet";
@@ -118,6 +121,8 @@ interface Usage {
 
 interface TranscriptEntry {
   type: string;
+  isCompactSummary?: boolean;
+  isMeta?: boolean;
   frameUrl?: string;
   title?: string;
   message?: {
@@ -351,6 +356,8 @@ async function buildConversationText(
       }
 
       if (!capturing) continue;
+      // Compaction summaries restate earlier work; meta entries are CLI chatter.
+      if (entry.isCompactSummary || entry.isMeta) continue;
 
       const role = entry.message?.role ?? entry.type;
       let entryText = extractText(entry.message?.content ?? "");
@@ -618,35 +625,73 @@ function provisionWebUI(): void {
   }
 }
 
+// -- Per-session lock --
+
+// One analysis per session at a time, so concurrent runs never drop each other's done items.
+function tryLock(lockPath: string): boolean {
+  try {
+    writeFileSync(lockPath, String(process.pid), { flag: "wx" });
+    return true;
+  } catch {
+    try {
+      if (Date.now() - statSync(lockPath).mtimeMs < LOCK_STALE_MS) return false;
+      unlinkSync(lockPath);
+      writeFileSync(lockPath, String(process.pid), { flag: "wx" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+async function acquireLock(sessionId: string, wait: boolean): Promise<boolean> {
+  mkdirSync(BASE_DIR, { recursive: true });
+  const lockPath = join(BASE_DIR, `lock-${sessionId}`);
+  const deadline = Date.now() + LOCK_STALE_MS;
+  while (!tryLock(lockPath)) {
+    if (!wait || Date.now() > deadline) return false;
+    await Bun.sleep(LOCK_POLL_MS);
+  }
+  process.on("exit", () => {
+    try { unlinkSync(lockPath); } catch { /* already gone */ }
+  });
+  return true;
+}
+
 // -- Main --
 
 async function main(): Promise<void> {
   provisionWebUI();
 
   const isFinal = process.argv.includes("--final");
+  const isPreCompact = process.argv.includes("--precompact");
   const finalBgIdx = process.argv.indexOf("--final-bg");
+  const preCompactBgIdx = process.argv.indexOf("--precompact-bg");
   const isFinalBg = finalBgIdx !== -1;
+  const isPreCompactBg = preCompactBgIdx !== -1;
+  const bgIdx = isFinalBg ? finalBgIdx : preCompactBgIdx;
 
-  // SessionEnd: save input and fork to a detached background process,
-  // then exit immediately so Claude Code's shutdown isn't blocked.
-  if (isFinal) {
+  // SessionEnd and PreCompact: save input and fork to a detached background process,
+  // then exit immediately so Claude Code's shutdown or compaction isn't blocked.
+  if (isFinal || isPreCompact) {
+    const mode = isFinal ? "final" : "precompact";
     mkdirSync(BASE_DIR, { recursive: true });
     const inputText = await Bun.stdin.text();
-    const inputFile = join(BASE_DIR, `final-${Date.now()}.json`);
+    const inputFile = join(BASE_DIR, `${mode}-${Date.now()}.json`);
     await Bun.write(inputFile, inputText);
     const scriptPath = import.meta.filename;
     const logFile = join(BASE_DIR, "session-end.log");
     Bun.spawn([
       "sh", "-c",
-      `bun "${scriptPath}" --final-bg "${inputFile}" </dev/null >>"${logFile}" 2>&1 &`,
+      `bun "${scriptPath}" --${mode}-bg "${inputFile}" </dev/null >>"${logFile}" 2>&1 &`,
     ]);
     process.exit(0);
   }
 
   // Read hook input: from temp file (detached) or stdin (normal Stop hook)
   let hookInput: HookInput;
-  if (isFinalBg) {
-    const inputFile = process.argv[finalBgIdx + 1];
+  if (bgIdx !== -1) {
+    const inputFile = process.argv[bgIdx + 1];
     try {
       hookInput = JSON.parse(await Bun.file(inputFile).text());
       unlinkSync(inputFile);
@@ -665,6 +710,8 @@ async function main(): Promise<void> {
 
   if (!sessionId || !transcriptPath) process.exit(0);
   if (!(await Bun.file(transcriptPath).exists())) process.exit(0);
+  // Stop skips a busy session and catches up next time; background runs wait their turn.
+  if (!(await acquireLock(sessionId, bgIdx !== -1))) process.exit(0);
 
   const msgCount = await countUserMessages(transcriptPath);
   const tokens = await computeTokenUsage(transcriptPath);
@@ -687,7 +734,6 @@ async function main(): Promise<void> {
     closeStaleSession(existing);
     existing.last_analyzed_at = 0;
     existing.summaries = [];
-    existing.done = [];
     await saveSessions(sessions);
     console.error("Session closed via /clear.");
     process.exit(0);
@@ -697,16 +743,15 @@ async function main(): Promise<void> {
   if (isTranscriptReset && existing) {
     existing.last_analyzed_at = 0;
     existing.summaries = [];
-    existing.done = [];
     await saveSessions(sessions);
     // Continue - treat this as a fresh first analysis
   }
 
   const effectiveLastAnalyzed = isTranscriptReset ? 0 : lastAnalyzedAt;
 
-  // Final: always fire if there are messages (skip only empty sessions)
+  // Final and pre-compact: always fire if there are messages (skip only empty sessions)
   // Incremental: respect threshold (1st message, then every 5)
-  if (isFinalBg) {
+  if (isFinalBg || isPreCompactBg) {
     if (msgCount === 0) process.exit(0);
   } else {
     if (!shouldAnalyze(msgCount, effectiveLastAnalyzed)) process.exit(0);
@@ -722,6 +767,8 @@ async function main(): Promise<void> {
 
   if (isFinalBg) {
     console.error("See ya! Saving session summary...");
+  } else if (isPreCompactBg) {
+    console.error("Compacting, saving session summary first...");
   } else if (isFirstAnalysis) {
     console.error("Session started, capturing context...");
   } else {
