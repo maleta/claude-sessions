@@ -711,7 +711,7 @@ const _raw = (window.SESSIONS_DATA || [])
     const tk = s.tokens || { input: 0, output: 0, cache_write: 0, cache_read: 0 };
     return {
     ...s,
-    _search: [s.title, s.summary, s.topics, s.project, s.project_path, ...(s.done || []),
+    _search: [s.id, s.title, s.summary, s.topics, s.project, s.project_path, ...(s.done || []),
       ...(s.artifacts || []).flatMap(a => [a.title, a.url])].join('\0').toLowerCase(),
     _topics: s.topics.split(',').map(t => t.trim()).filter(Boolean),
     _artifacts: s.artifacts || [],
@@ -1269,7 +1269,7 @@ blok.mount('#app', {
         { input: {
           class: 'search-box',
           type: 'text',
-          bind: { placeholder: 'Search sessions by title, summary, topics, or project...' },
+          bind: { placeholder: 'Search sessions by title, summary, topics, project, or ID...' },
           model: $.searchInput,
         }},
       ]}},
