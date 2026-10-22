@@ -41,7 +41,7 @@ That's it. The plugin auto-registers its hooks and provisions the web UI on firs
 
 After each analysis, the hook writes/updates a `SESSION_SUMMARIES.md` file in the project directory. This file contains:
 - Session title and summary
-- **Done** list: concrete items finished during the session
+- **Done** list: concrete items finished during the session, condensed into a few higher-level items every 3rd analysis and at session end
 - Date, branch, status, message count, topics
 - Session ID and resume command
 
