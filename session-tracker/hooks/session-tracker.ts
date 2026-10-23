@@ -8,6 +8,7 @@
  * - Every 5 messages after: delta-only analysis (new messages since last)
  * - Before compaction: analyzes whatever is pending, regardless of the threshold
  * - On session end: folds any remaining messages into the entry and marks it completed
+ * - Every 3rd analysis and on session end: condenses a long Done list into higher-level items
  */
 
 import { mkdirSync, statSync, copyFileSync, unlinkSync, writeFileSync, readFileSync, renameSync } from "fs";
@@ -28,6 +29,8 @@ const STALE_SESSION_DAYS = 4;
 const LOCK_STALE_MS = 5 * 60 * 1000;
 const LOCK_POLL_MS = 1000;
 const CLI_TIMEOUT_MS = 2 * 60 * 1000;
+const CONDENSE_EVERY = 3;
+const CONDENSE_MIN_ITEMS = 6;
 
 const SUMMARY_MODELS = ["haiku", "sonnet", "opus"];
 const DEFAULT_SUMMARY_MODEL = "sonnet";
@@ -67,6 +70,27 @@ Return a JSON object with these fields:
 - "done": array of concrete results finished in this excerpt only, one short past-tense line each (e.g. "Added a model setting to the hook"). Skip plans, discussion, and items already listed in the entry so far. Empty array when nothing was finished.
 - "topics": comma-separated list of 3-6 key topics for the whole session
 - "status": "debugging" when chasing a bug or failure, "exploring" when reading or researching without changes, "completed" when the goal was reached, otherwise "in-progress"`;
+
+const CONDENSE_SCHEMA = JSON.stringify({
+  type: "object",
+  properties: {
+    done: { type: "array", items: { type: "string" } },
+  },
+  required: ["done"],
+});
+
+const CONDENSE_PROMPT = `Condense the Done list of a Claude Code session log entry into higher-level results.
+
+<session_title>
+{title}
+</session_title>
+
+<done_items>
+{items}
+</done_items>
+
+Return a JSON object with one field:
+- "done": array of at most 6 results for the whole session, one short past-tense line each. Group the items by feature or area and write one line per group that names the outcome, with its steps and fixes folded in. Add nothing that is not in the list.`;
 
 // -- Types --
 
@@ -389,7 +413,7 @@ async function buildConversationText(
 
 // -- Claude CLI --
 
-async function callCli(prompt: string, model: string): Promise<SummaryResult> {
+async function callCli(prompt: string, model: string, schema: string): Promise<SummaryResult> {
   const proc = Bun.spawn(
     [
       "claude", "-p",
@@ -398,7 +422,7 @@ async function callCli(prompt: string, model: string): Promise<SummaryResult> {
       "--tools", "",
       "--strict-mcp-config",
       "--output-format", "json",
-      "--json-schema", SUMMARY_SCHEMA,
+      "--json-schema", schema,
       "--no-session-persistence",
     ],
     { stdin: new Blob([prompt]), stdout: "pipe", stderr: "pipe" }
@@ -447,7 +471,16 @@ async function analyzeConversation(
     conversation: conversationText,
   };
   const prompt = SUMMARY_PROMPT.replace(/\{(previous|conversation)\}/g, (_, key: string) => values[key]);
-  return callCli(prompt, model);
+  return callCli(prompt, model, SUMMARY_SCHEMA);
+}
+
+async function condenseDone(done: string[], title: string, model: string): Promise<string[]> {
+  const values: Record<string, string> = {
+    title,
+    items: done.map(d => `- ${d}`).join("\n"),
+  };
+  const prompt = CONDENSE_PROMPT.replace(/\{(title|items)\}/g, (_, key: string) => values[key]);
+  return toDoneList((await callCli(prompt, model, CONDENSE_SCHEMA)).done);
 }
 
 function toDoneList(value: unknown): string[] {
@@ -845,6 +878,16 @@ async function main(): Promise<void> {
   } catch (e) {
     console.error(`session-tracker: error: ${e}`);
     process.exit(0);
+  }
+
+  const analysisCount = (existing?.analysis_count ?? 0) + 1;
+  if ((isFinalBg || analysisCount % CONDENSE_EVERY === 0) && updatedDone.length >= CONDENSE_MIN_ITEMS) {
+    try {
+      const condensed = await condenseDone(updatedDone, summary.title ?? existing?.title ?? "", model);
+      if (condensed.length) updatedDone.splice(0, updatedDone.length, ...condensed);
+    } catch (e) {
+      console.error(`session-tracker: condense error: ${e}`);
+    }
   }
 
   // Re-read sessions under the data lock so concurrent hooks of other sessions are kept
